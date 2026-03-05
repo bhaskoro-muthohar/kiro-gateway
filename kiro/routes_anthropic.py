@@ -313,13 +313,13 @@ async def messages(
             kiro_payload,
             stream=True
         )
-        
+
         if response.status_code != 200:
             try:
                 error_content = await response.aread()
             except Exception:
                 error_content = b"Unknown error"
-            
+
             await http_client.close()
             error_text = error_content.decode('utf-8', errors='replace')
             
