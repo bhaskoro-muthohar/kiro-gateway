@@ -280,7 +280,7 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
             kiro_payload,
             stream=True
         )
-
+        
         if response.status_code != 200:
             try:
                 error_content = await response.aread()

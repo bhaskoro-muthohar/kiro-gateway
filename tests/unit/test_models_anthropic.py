@@ -21,6 +21,7 @@ from kiro.models_anthropic import (
     ThinkingContentBlock,
     ToolUseContentBlock,
     ToolResultContentBlock,
+    ToolReferenceContentBlock,
     # Image models
     Base64ImageSource,
     URLImageSource,
@@ -975,6 +976,82 @@ class TestToolResultContentBlock:
         
         print(f"Comparing is_error: Expected None, Got {block.is_error}")
         assert block.is_error is None
+
+    def test_accepts_tool_reference_in_content(self):
+        """
+        What it does: Verifies ToolResultContentBlock accepts ToolReferenceContentBlock in content.
+        Purpose: Ensure deferred tool references from Claude Code v2.1.69+ are valid.
+        """
+        print("Setup: Creating ToolResultContentBlock with tool_reference content...")
+        block = ToolResultContentBlock(
+            tool_use_id="call_1",
+            content=[
+                TextContentBlock(text="Loaded tool"),
+                ToolReferenceContentBlock(tool_name="mcp__slack__read_channel")
+            ]
+        )
+
+        print(f"Comparing content length: Expected 2, Got {len(block.content)}")
+        assert len(block.content) == 2
+        assert block.content[1].type == "tool_reference"
+        assert block.content[1].tool_name == "mcp__slack__read_channel"
+
+
+# ==================================================================================================
+# Tests for ToolReferenceContentBlock
+# ==================================================================================================
+
+class TestToolReferenceContentBlock:
+    """Tests for ToolReferenceContentBlock Pydantic model."""
+
+    def test_valid_tool_reference_block(self):
+        """
+        What it does: Verifies creation of valid ToolReferenceContentBlock.
+        Purpose: Ensure model accepts valid tool reference data.
+        """
+        print("Setup: Creating ToolReferenceContentBlock with valid data...")
+        block = ToolReferenceContentBlock(tool_name="mcp__slack__read_channel")
+
+        print(f"Comparing type: Expected 'tool_reference', Got '{block.type}'")
+        assert block.type == "tool_reference"
+
+        print(f"Comparing tool_name: Got '{block.tool_name}'")
+        assert block.tool_name == "mcp__slack__read_channel"
+
+    def test_requires_tool_name(self):
+        """
+        What it does: Verifies that tool_name is required.
+        Purpose: Ensure validation fails without tool_name.
+        """
+        print("Setup: Attempting to create ToolReferenceContentBlock without tool_name...")
+
+        with pytest.raises(ValidationError) as exc_info:
+            ToolReferenceContentBlock()
+
+        print(f"ValidationError raised: {exc_info.value}")
+        assert "tool_name" in str(exc_info.value)
+
+    def test_allows_extra_fields(self):
+        """
+        What it does: Verifies extra fields are allowed.
+        Purpose: Ensure forward compatibility with new fields from Claude Code.
+        """
+        print("Setup: Creating ToolReferenceContentBlock with extra fields...")
+        block = ToolReferenceContentBlock(tool_name="Read", some_future_field="value")
+
+        print(f"Comparing tool_name: Got '{block.tool_name}'")
+        assert block.tool_name == "Read"
+
+    def test_content_block_union_accepts_tool_reference(self):
+        """
+        What it does: Verifies ContentBlock union accepts ToolReferenceContentBlock.
+        Purpose: Ensure union includes tool_reference blocks.
+        """
+        print("Setup: Creating ToolReferenceContentBlock as ContentBlock...")
+        block: ContentBlock = ToolReferenceContentBlock(tool_name="Write")
+
+        print(f"Comparing type: Expected 'tool_reference', Got '{block.type}'")
+        assert block.type == "tool_reference"
 
 
 # ==================================================================================================

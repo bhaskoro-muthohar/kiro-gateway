@@ -279,6 +279,25 @@ class TestExtractTextContent:
         print(f"Comparing result: Expected 'Before toolAfter tool', Got '{result}'")
         assert result == "Before toolAfter tool"
 
+    def test_skips_tool_reference_blocks(self):
+        """
+        What it does: Verifies that tool_reference blocks are skipped during text extraction.
+        Purpose: Ensure Claude Code deferred tool references don't pollute text output.
+        """
+        print("Setup: Content with tool_reference blocks...")
+        content = [
+            {"type": "text", "text": "Loaded tools:"},
+            {"type": "tool_reference", "tool_name": "mcp__slack__read_channel"},
+            {"type": "tool_reference", "tool_name": "Read"},
+            {"type": "text", "text": " done"}
+        ]
+
+        print("Action: Extracting text...")
+        result = extract_text_content(content)
+
+        print(f"Comparing result: Expected 'Loaded tools: done', Got '{result}'")
+        assert result == "Loaded tools: done"
+
 
 # ==================================================================================================
 # Tests for extract_images_from_content (Issue #30 fix)
