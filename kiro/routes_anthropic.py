@@ -34,7 +34,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
 from loguru import logger
 
-from kiro.config import PROXY_API_KEY
+from kiro.config import PROXY_API_KEY, ALLOW_LOCALHOST_BYPASS
 from kiro.models_anthropic import (
     AnthropicMessagesRequest,
     AnthropicMessagesResponse,
@@ -67,34 +67,47 @@ auth_header = APIKeyHeader(name="Authorization", auto_error=False)
 
 
 async def verify_anthropic_api_key(
+    request: Request,
     x_api_key: Optional[str] = Security(anthropic_api_key_header),
     authorization: Optional[str] = Security(auth_header)
 ) -> bool:
     """
     Verify API key for Anthropic API.
-    
+
     Supports two authentication methods:
     1. x-api-key header (Anthropic native)
     2. Authorization: Bearer header (for compatibility)
-    
+
+    Localhost connections are allowed without API key validation
+    when ALLOW_LOCALHOST_BYPASS is enabled (default: true).
+    This supports Claude Code OAuth mode needed for remote-control.
+
     Args:
+        request: FastAPI Request for client IP check
         x_api_key: Value from x-api-key header
         authorization: Value from Authorization header
-    
+
     Returns:
         True if key is valid
-    
+
     Raises:
         HTTPException: 401 if key is invalid or missing
     """
     # Check x-api-key first (Anthropic native)
     if x_api_key and x_api_key == PROXY_API_KEY:
         return True
-    
+
     # Fall back to Authorization: Bearer
     if authorization and authorization == f"Bearer {PROXY_API_KEY}":
         return True
-    
+
+    # Allow localhost connections with any auth (supports Claude Code OAuth for remote-control)
+    if ALLOW_LOCALHOST_BYPASS:
+        client_ip = request.client.host if request.client else None
+        if client_ip in ("127.0.0.1", "::1"):
+            logger.debug(f"Localhost bypass: accepted connection from {client_ip}")
+            return True
+
     logger.warning("Access attempt with invalid API key (Anthropic endpoint)")
     raise HTTPException(
         status_code=401,

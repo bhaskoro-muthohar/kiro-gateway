@@ -23,12 +23,27 @@ from kiro.config import PROXY_API_KEY
 
 
 # =============================================================================
+# Helper: Mock Request with client IP
+# =============================================================================
+
+def _mock_request(ip="192.168.1.100"):
+    """Create a mock FastAPI Request with a given client IP."""
+    request = Mock()
+    if ip is None:
+        request.client = None
+    else:
+        request.client = Mock()
+        request.client.host = ip
+    return request
+
+
+# =============================================================================
 # Tests for verify_anthropic_api_key function
 # =============================================================================
 
 class TestVerifyAnthropicApiKey:
     """Tests for the verify_anthropic_api_key authentication function."""
-    
+
     @pytest.mark.asyncio
     async def test_valid_x_api_key_returns_true(self):
         """
@@ -36,13 +51,13 @@ class TestVerifyAnthropicApiKey:
         Purpose: Ensure Anthropic native authentication works.
         """
         print("Setup: Creating valid x-api-key...")
-        
+
         print("Action: Calling verify_anthropic_api_key...")
-        result = await verify_anthropic_api_key(x_api_key=PROXY_API_KEY, authorization=None)
-        
+        result = await verify_anthropic_api_key(request=_mock_request(), x_api_key=PROXY_API_KEY, authorization=None)
+
         print(f"Comparing result: Expected True, Got {result}")
         assert result is True
-    
+
     @pytest.mark.asyncio
     async def test_valid_bearer_token_returns_true(self):
         """
@@ -51,13 +66,13 @@ class TestVerifyAnthropicApiKey:
         """
         print("Setup: Creating valid Bearer token...")
         valid_auth = f"Bearer {PROXY_API_KEY}"
-        
+
         print("Action: Calling verify_anthropic_api_key...")
-        result = await verify_anthropic_api_key(x_api_key=None, authorization=valid_auth)
-        
+        result = await verify_anthropic_api_key(request=_mock_request(), x_api_key=None, authorization=valid_auth)
+
         print(f"Comparing result: Expected True, Got {result}")
         assert result is True
-    
+
     @pytest.mark.asyncio
     async def test_x_api_key_takes_precedence(self):
         """
@@ -65,16 +80,17 @@ class TestVerifyAnthropicApiKey:
         Purpose: Ensure Anthropic native auth has priority.
         """
         print("Setup: Both headers provided...")
-        
+
         print("Action: Calling verify_anthropic_api_key with both headers...")
         result = await verify_anthropic_api_key(
+            request=_mock_request(),
             x_api_key=PROXY_API_KEY,
             authorization="Bearer wrong_key"
         )
-        
+
         print(f"Comparing result: Expected True, Got {result}")
         assert result is True
-    
+
     @pytest.mark.asyncio
     async def test_invalid_x_api_key_raises_401(self):
         """
@@ -82,14 +98,14 @@ class TestVerifyAnthropicApiKey:
         Purpose: Ensure unauthorized access is blocked.
         """
         print("Setup: Creating invalid x-api-key...")
-        
+
         print("Action: Calling verify_anthropic_api_key with invalid key...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_anthropic_api_key(x_api_key="wrong_key", authorization=None)
-        
+            await verify_anthropic_api_key(request=_mock_request(), x_api_key="wrong_key", authorization=None)
+
         print(f"Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
-    
+
     @pytest.mark.asyncio
     async def test_invalid_bearer_token_raises_401(self):
         """
@@ -97,14 +113,14 @@ class TestVerifyAnthropicApiKey:
         Purpose: Ensure unauthorized access is blocked.
         """
         print("Setup: Creating invalid Bearer token...")
-        
+
         print("Action: Calling verify_anthropic_api_key with invalid token...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_anthropic_api_key(x_api_key=None, authorization="Bearer wrong_key")
-        
+            await verify_anthropic_api_key(request=_mock_request(), x_api_key=None, authorization="Bearer wrong_key")
+
         print(f"Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
-    
+
     @pytest.mark.asyncio
     async def test_missing_both_headers_raises_401(self):
         """
@@ -112,14 +128,14 @@ class TestVerifyAnthropicApiKey:
         Purpose: Ensure authentication is required.
         """
         print("Setup: No authentication headers...")
-        
+
         print("Action: Calling verify_anthropic_api_key with no headers...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_anthropic_api_key(x_api_key=None, authorization=None)
-        
+            await verify_anthropic_api_key(request=_mock_request(), x_api_key=None, authorization=None)
+
         print(f"Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
-    
+
     @pytest.mark.asyncio
     async def test_empty_x_api_key_raises_401(self):
         """
@@ -127,14 +143,14 @@ class TestVerifyAnthropicApiKey:
         Purpose: Ensure empty credentials are blocked.
         """
         print("Setup: Empty x-api-key...")
-        
+
         print("Action: Calling verify_anthropic_api_key with empty key...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_anthropic_api_key(x_api_key="", authorization=None)
-        
+            await verify_anthropic_api_key(request=_mock_request(), x_api_key="", authorization=None)
+
         print(f"Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
-    
+
     @pytest.mark.asyncio
     async def test_error_response_format_is_anthropic_style(self):
         """
@@ -142,16 +158,146 @@ class TestVerifyAnthropicApiKey:
         Purpose: Ensure error format matches Anthropic API.
         """
         print("Setup: Invalid credentials...")
-        
+
         print("Action: Calling verify_anthropic_api_key...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_anthropic_api_key(x_api_key="wrong", authorization=None)
-        
+            await verify_anthropic_api_key(request=_mock_request(), x_api_key="wrong", authorization=None)
+
         print(f"Checking: Error format...")
         detail = exc_info.value.detail
         assert "type" in detail
         assert "error" in detail
         assert detail["error"]["type"] == "authentication_error"
+
+
+# =============================================================================
+# Tests for localhost bypass in verify_anthropic_api_key
+# =============================================================================
+
+class TestAnthropicLocalhostBypass:
+    """Tests for localhost auth bypass (supports Claude Code OAuth for remote-control)."""
+
+    @pytest.mark.asyncio
+    async def test_localhost_ipv4_bypass_accepts_any_key(self):
+        """
+        What it does: Verifies localhost IPv4 connections bypass API key check.
+        Purpose: Support Claude Code OAuth mode for remote-control.
+        """
+        result = await verify_anthropic_api_key(
+            request=_mock_request("127.0.0.1"),
+            x_api_key="random_oauth_token",
+            authorization=None
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_localhost_ipv6_bypass_accepts_any_key(self):
+        """
+        What it does: Verifies localhost IPv6 connections bypass API key check.
+        Purpose: Support IPv6 localhost connections.
+        """
+        result = await verify_anthropic_api_key(
+            request=_mock_request("::1"),
+            x_api_key="random_oauth_token",
+            authorization=None
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_localhost_bypass_with_no_key(self):
+        """
+        What it does: Verifies localhost works even with no auth headers at all.
+        Purpose: Ensure localhost bypass doesn't require any credentials.
+        """
+        result = await verify_anthropic_api_key(
+            request=_mock_request("127.0.0.1"),
+            x_api_key=None,
+            authorization=None
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_localhost_bypass_with_bearer_oauth(self):
+        """
+        What it does: Verifies localhost works with an OAuth bearer token.
+        Purpose: This is the actual Claude Code remote-control scenario.
+        """
+        result = await verify_anthropic_api_key(
+            request=_mock_request("127.0.0.1"),
+            x_api_key=None,
+            authorization="Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.oauth_token"
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_remote_ip_with_invalid_key_rejected(self):
+        """
+        What it does: Verifies remote IPs are still rejected with invalid keys.
+        Purpose: Ensure bypass only applies to localhost.
+        """
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_anthropic_api_key(
+                request=_mock_request("192.168.1.100"),
+                x_api_key="wrong_key",
+                authorization=None
+            )
+        assert exc_info.value.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_remote_ip_with_no_key_rejected(self):
+        """
+        What it does: Verifies remote IPs are rejected without credentials.
+        Purpose: Ensure non-localhost connections require auth.
+        """
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_anthropic_api_key(
+                request=_mock_request("10.0.0.5"),
+                x_api_key=None,
+                authorization=None
+            )
+        assert exc_info.value.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_valid_proxy_key_still_works_from_remote(self):
+        """
+        What it does: Verifies valid PROXY_API_KEY works from any IP.
+        Purpose: Ensure normal auth path is unaffected.
+        """
+        result = await verify_anthropic_api_key(
+            request=_mock_request("192.168.1.100"),
+            x_api_key=PROXY_API_KEY,
+            authorization=None
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_localhost_bypass_disabled_by_config(self):
+        """
+        What it does: Verifies bypass is disabled when ALLOW_LOCALHOST_BYPASS=false.
+        Purpose: Ensure users can enforce strict auth.
+        """
+        with patch("kiro.routes_anthropic.ALLOW_LOCALHOST_BYPASS", False):
+            with pytest.raises(HTTPException) as exc_info:
+                await verify_anthropic_api_key(
+                    request=_mock_request("127.0.0.1"),
+                    x_api_key="wrong_key",
+                    authorization=None
+                )
+            assert exc_info.value.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_null_client_rejected(self):
+        """
+        What it does: Verifies request with no client info is rejected.
+        Purpose: Ensure edge case of missing client doesn't bypass auth.
+        """
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_anthropic_api_key(
+                request=_mock_request(ip=None),
+                x_api_key="wrong_key",
+                authorization=None
+            )
+        assert exc_info.value.status_code == 401
 
 
 # =============================================================================

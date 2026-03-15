@@ -26,12 +26,27 @@ from kiro.config import PROXY_API_KEY, APP_VERSION
 
 
 # =============================================================================
+# Helper: Mock Request with client IP
+# =============================================================================
+
+def _mock_request(ip="192.168.1.100"):
+    """Create a mock FastAPI Request with a given client IP."""
+    request = Mock()
+    if ip is None:
+        request.client = None
+    else:
+        request.client = Mock()
+        request.client.host = ip
+    return request
+
+
+# =============================================================================
 # Tests for verify_api_key function
 # =============================================================================
 
 class TestVerifyApiKey:
     """Tests for the verify_api_key authentication function."""
-    
+
     @pytest.mark.asyncio
     async def test_valid_bearer_token_returns_true(self):
         """
@@ -40,13 +55,13 @@ class TestVerifyApiKey:
         """
         print("Setup: Creating valid Bearer token...")
         valid_header = f"Bearer {PROXY_API_KEY}"
-        
+
         print("Action: Calling verify_api_key...")
-        result = await verify_api_key(valid_header)
-        
+        result = await verify_api_key(request=_mock_request(), auth_header=valid_header)
+
         print(f"Comparing result: Expected True, Got {result}")
         assert result is True
-    
+
     @pytest.mark.asyncio
     async def test_invalid_api_key_raises_401(self):
         """
@@ -55,15 +70,15 @@ class TestVerifyApiKey:
         """
         print("Setup: Creating invalid Bearer token...")
         invalid_header = "Bearer wrong_key_12345"
-        
+
         print("Action: Calling verify_api_key with invalid key...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_api_key(invalid_header)
-        
+            await verify_api_key(request=_mock_request(), auth_header=invalid_header)
+
         print(f"Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
         assert "Invalid or missing API Key" in exc_info.value.detail
-    
+
     @pytest.mark.asyncio
     async def test_missing_api_key_raises_401(self):
         """
@@ -71,14 +86,14 @@ class TestVerifyApiKey:
         Purpose: Ensure requests without authentication are blocked.
         """
         print("Setup: No API key provided...")
-        
+
         print("Action: Calling verify_api_key with None...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_api_key(None)
-        
+            await verify_api_key(request=_mock_request(), auth_header=None)
+
         print(f"Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
-    
+
     @pytest.mark.asyncio
     async def test_empty_api_key_raises_401(self):
         """
@@ -86,14 +101,14 @@ class TestVerifyApiKey:
         Purpose: Ensure empty credentials are blocked.
         """
         print("Setup: Empty API key...")
-        
+
         print("Action: Calling verify_api_key with empty string...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_api_key("")
-        
+            await verify_api_key(request=_mock_request(), auth_header="")
+
         print(f"Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
-    
+
     @pytest.mark.asyncio
     async def test_key_without_bearer_prefix_raises_401(self):
         """
@@ -102,14 +117,14 @@ class TestVerifyApiKey:
         """
         print("Setup: API key without Bearer prefix...")
         wrong_format = PROXY_API_KEY  # Without "Bearer "
-        
+
         print("Action: Calling verify_api_key...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_api_key(wrong_format)
-        
+            await verify_api_key(request=_mock_request(), auth_header=wrong_format)
+
         print(f"Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
-    
+
     @pytest.mark.asyncio
     async def test_bearer_with_extra_spaces_raises_401(self):
         """
@@ -118,14 +133,14 @@ class TestVerifyApiKey:
         """
         print("Setup: Bearer token with extra spaces...")
         malformed = f"Bearer  {PROXY_API_KEY}"  # Double space
-        
+
         print("Action: Calling verify_api_key...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_api_key(malformed)
-        
+            await verify_api_key(request=_mock_request(), auth_header=malformed)
+
         print(f"Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
-    
+
     @pytest.mark.asyncio
     async def test_lowercase_bearer_raises_401(self):
         """
@@ -134,13 +149,84 @@ class TestVerifyApiKey:
         """
         print("Setup: Lowercase bearer prefix...")
         lowercase = f"bearer {PROXY_API_KEY}"
-        
+
         print("Action: Calling verify_api_key...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_api_key(lowercase)
-        
+            await verify_api_key(request=_mock_request(), auth_header=lowercase)
+
         print(f"Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
+
+
+# =============================================================================
+# Tests for localhost bypass in verify_api_key
+# =============================================================================
+
+class TestOpenAILocalhostBypass:
+    """Tests for localhost auth bypass on OpenAI endpoints."""
+
+    @pytest.mark.asyncio
+    async def test_localhost_ipv4_bypass_accepts_any_key(self):
+        """
+        What it does: Verifies localhost IPv4 connections bypass API key check.
+        Purpose: Support Claude Code OAuth mode for remote-control.
+        """
+        result = await verify_api_key(
+            request=_mock_request("127.0.0.1"),
+            auth_header="Bearer random_oauth_token"
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_localhost_ipv6_bypass_accepts_any_key(self):
+        """
+        What it does: Verifies localhost IPv6 connections bypass API key check.
+        Purpose: Support IPv6 localhost connections.
+        """
+        result = await verify_api_key(
+            request=_mock_request("::1"),
+            auth_header="Bearer random_oauth_token"
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_localhost_bypass_with_no_header(self):
+        """
+        What it does: Verifies localhost works even with no auth header.
+        Purpose: Ensure localhost bypass doesn't require any credentials.
+        """
+        result = await verify_api_key(
+            request=_mock_request("127.0.0.1"),
+            auth_header=None
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_remote_ip_with_invalid_key_rejected(self):
+        """
+        What it does: Verifies remote IPs are still rejected with invalid keys.
+        Purpose: Ensure bypass only applies to localhost.
+        """
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_api_key(
+                request=_mock_request("192.168.1.100"),
+                auth_header="Bearer wrong_key"
+            )
+        assert exc_info.value.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_localhost_bypass_disabled_by_config(self):
+        """
+        What it does: Verifies bypass is disabled when ALLOW_LOCALHOST_BYPASS=false.
+        Purpose: Ensure users can enforce strict auth.
+        """
+        with patch("kiro.routes_openai.ALLOW_LOCALHOST_BYPASS", False):
+            with pytest.raises(HTTPException) as exc_info:
+                await verify_api_key(
+                    request=_mock_request("127.0.0.1"),
+                    auth_header="Bearer wrong_key"
+                )
+            assert exc_info.value.status_code == 401
 
 
 # =============================================================================
