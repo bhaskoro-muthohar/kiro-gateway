@@ -98,6 +98,10 @@ SERVER_PORT: int = int(os.getenv("SERVER_PORT", str(DEFAULT_SERVER_PORT)))
 # API key for proxy access (clients must pass it in Authorization header)
 PROXY_API_KEY: str = os.getenv("PROXY_API_KEY", "my-super-secret-password-123")
 
+# Allow localhost connections without API key validation
+# Enables Claude Code OAuth mode (needed for remote-control) when running locally
+ALLOW_LOCALHOST_BYPASS: bool = os.getenv("ALLOW_LOCALHOST_BYPASS", "true").lower() in ("true", "1", "yes")
+
 # ==================================================================================================
 # VPN/Proxy Settings for Kiro API Access
 # ==================================================================================================

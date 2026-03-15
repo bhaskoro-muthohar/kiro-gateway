@@ -36,6 +36,7 @@ from loguru import logger
 
 from kiro.config import (
     PROXY_API_KEY,
+    ALLOW_LOCALHOST_BYPASS,
     APP_VERSION,
 )
 from kiro.models_openai import (
@@ -62,25 +63,40 @@ except ImportError:
 api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
 
 
-async def verify_api_key(auth_header: str = Security(api_key_header)) -> bool:
+async def verify_api_key(
+    request: Request,
+    auth_header: str = Security(api_key_header)
+) -> bool:
     """
     Verify API key in Authorization header.
-    
+
     Expects format: "Bearer {PROXY_API_KEY}"
-    
+
+    Localhost connections are allowed without API key validation
+    when ALLOW_LOCALHOST_BYPASS is enabled (default: true).
+
     Args:
+        request: FastAPI Request for client IP check
         auth_header: Authorization header value
-    
+
     Returns:
         True if key is valid
-    
+
     Raises:
         HTTPException: 401 if key is invalid or missing
     """
-    if not auth_header or auth_header != f"Bearer {PROXY_API_KEY}":
-        logger.warning("Access attempt with invalid API key.")
-        raise HTTPException(status_code=401, detail="Invalid or missing API Key")
-    return True
+    if auth_header and auth_header == f"Bearer {PROXY_API_KEY}":
+        return True
+
+    # Allow localhost connections with any auth (supports Claude Code OAuth for remote-control)
+    if ALLOW_LOCALHOST_BYPASS:
+        client_ip = request.client.host if request.client else None
+        if client_ip in ("127.0.0.1", "::1"):
+            logger.debug(f"Localhost bypass: accepted connection from {client_ip}")
+            return True
+
+    logger.warning("Access attempt with invalid API key.")
+    raise HTTPException(status_code=401, detail="Invalid or missing API Key")
 
 
 # --- Router ---
