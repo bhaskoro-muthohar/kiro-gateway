@@ -1444,3 +1444,96 @@ class TestStreamWithFirstTokenRetryAnthropic:
         print(f"Call count: {call_count}")
         assert call_count == 5  # Should try exactly 5 times
         print("✓ max_retries parameter respected")
+
+
+# ==================================================================================================
+# Tests for thinking truncation detection
+# ==================================================================================================
+
+class TestThinkingTruncationDetection:
+    """Tests for detecting truncation when only thinking content is present."""
+
+    @pytest.mark.asyncio
+    async def test_thinking_truncation_detected_when_only_thinking_content(
+        self, mock_response, mock_model_cache, mock_auth_manager
+    ):
+        """
+        Stream has thinking content, no context_usage_percentage, no regular content
+        → thinking_was_truncated should be True and save_thinking_truncation called.
+        """
+        async def mock_parse_kiro_stream(*args, **kwargs):
+            yield KiroEvent(type="thinking", thinking_content="Let me reason about this...")
+
+        events = []
+
+        with patch('kiro.streaming_anthropic.parse_kiro_stream', mock_parse_kiro_stream), \
+             patch('kiro.streaming_anthropic.parse_bracket_tool_calls', return_value=[]), \
+             patch('kiro.streaming_anthropic.FAKE_REASONING_HANDLING', 'as_reasoning_content'), \
+             patch('kiro.config.TRUNCATION_RECOVERY', True), \
+             patch('kiro.truncation_recovery.should_inject_recovery', return_value=True) as mock_should, \
+             patch('kiro.truncation_state.save_thinking_truncation') as mock_save:
+            async for event in stream_kiro_to_anthropic(
+                mock_response, "claude-sonnet-4", mock_model_cache, mock_auth_manager
+            ):
+                events.append(event)
+
+            mock_save.assert_called_once()
+            print("✅ thinking truncation detected and save_thinking_truncation called")
+
+    @pytest.mark.asyncio
+    async def test_thinking_truncation_not_detected_when_stream_completes_normally(
+        self, mock_response, mock_model_cache, mock_auth_manager
+    ):
+        """
+        Stream completes with context_usage_percentage → no truncation.
+        """
+        async def mock_parse_kiro_stream(*args, **kwargs):
+            yield KiroEvent(type="thinking", thinking_content="Reasoning...")
+            yield KiroEvent(type="content", content="Here is the answer.")
+            yield KiroEvent(type="context_usage", context_usage_percentage=42.0)
+
+        events = []
+
+        with patch('kiro.streaming_anthropic.parse_kiro_stream', mock_parse_kiro_stream), \
+             patch('kiro.streaming_anthropic.parse_bracket_tool_calls', return_value=[]), \
+             patch('kiro.streaming_anthropic.FAKE_REASONING_HANDLING', 'as_reasoning_content'), \
+             patch('kiro.config.TRUNCATION_RECOVERY', True), \
+             patch('kiro.truncation_recovery.should_inject_recovery', return_value=True), \
+             patch('kiro.truncation_state.save_thinking_truncation') as mock_save:
+            async for event in stream_kiro_to_anthropic(
+                mock_response, "claude-sonnet-4", mock_model_cache, mock_auth_manager
+            ):
+                events.append(event)
+
+            mock_save.assert_not_called()
+            print("✅ no thinking truncation when stream completes normally")
+
+    @pytest.mark.asyncio
+    async def test_thinking_truncation_not_detected_when_content_also_present(
+        self, mock_response, mock_model_cache, mock_auth_manager
+    ):
+        """
+        Stream has thinking AND regular content but no completion signal
+        → content_was_truncated, NOT thinking_was_truncated.
+        """
+        async def mock_parse_kiro_stream(*args, **kwargs):
+            yield KiroEvent(type="thinking", thinking_content="Reasoning...")
+            yield KiroEvent(type="content", content="Partial answer")
+
+        events = []
+
+        with patch('kiro.streaming_anthropic.parse_kiro_stream', mock_parse_kiro_stream), \
+             patch('kiro.streaming_anthropic.parse_bracket_tool_calls', return_value=[]), \
+             patch('kiro.streaming_anthropic.FAKE_REASONING_HANDLING', 'as_reasoning_content'), \
+             patch('kiro.config.TRUNCATION_RECOVERY', True), \
+             patch('kiro.truncation_recovery.should_inject_recovery', return_value=True), \
+             patch('kiro.truncation_state.save_thinking_truncation') as mock_save_thinking, \
+             patch('kiro.truncation_state.save_content_truncation') as mock_save_content:
+            async for event in stream_kiro_to_anthropic(
+                mock_response, "claude-sonnet-4", mock_model_cache, mock_auth_manager
+            ):
+                events.append(event)
+
+            mock_save_thinking.assert_not_called()
+            mock_save_content.assert_called_once()
+            print("✅ content truncation detected, not thinking truncation")

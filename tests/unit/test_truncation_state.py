@@ -22,12 +22,16 @@ from kiro.truncation_state import (
     get_tool_truncation,
     save_content_truncation,
     get_content_truncation,
+    save_thinking_truncation,
+    get_thinking_truncation,
     get_cache_stats,
     ToolTruncationInfo,
     ContentTruncationInfo,
     _tool_truncation_cache,
-    _content_truncation_cache
+    _content_truncation_cache,
 )
+
+import kiro.truncation_state as _ts_module
 
 
 @pytest.fixture(autouse=True)
@@ -36,10 +40,12 @@ def clear_cache():
     print("\n[Setup] Clearing truncation cache...")
     _tool_truncation_cache.clear()
     _content_truncation_cache.clear()
+    _ts_module._thinking_truncation_pending = False
     yield
     print("[Teardown] Clearing truncation cache...")
     _tool_truncation_cache.clear()
     _content_truncation_cache.clear()
+    _ts_module._thinking_truncation_pending = False
 
 
 class TestToolTruncation:
@@ -423,5 +429,46 @@ class TestCacheStats:
         # Assert
         assert stats["tool_truncations"] == 1, "Should have 1 tool truncation left"
         assert stats["total"] == 2, "Total should be 2"
-        
+
         print("✅ Test passed: Cache stats accurate")
+
+
+class TestThinkingTruncation:
+    """Test suite for thinking truncation flag operations."""
+
+    def test_save_and_get_thinking_truncation(self):
+        """Save flag, first get returns True, second get returns False."""
+        print("\n=== Test: Save and get thinking truncation ===")
+
+        save_thinking_truncation()
+        result1 = get_thinking_truncation()
+        result2 = get_thinking_truncation()
+
+        assert result1 is True, "First get should return True"
+        assert result2 is False, "Second get should return False (one-time retrieval)"
+
+        print("✅ Test passed: Thinking truncation one-time retrieval works")
+
+    def test_get_thinking_truncation_when_none_saved(self):
+        """Get without save returns False."""
+        print("\n=== Test: Get thinking truncation when none saved ===")
+
+        result = get_thinking_truncation()
+        assert result is False, "Should return False when nothing saved"
+
+        print("✅ Test passed: Returns False when no thinking truncation")
+
+    def test_thinking_truncation_in_cache_stats(self):
+        """Cache stats include thinking truncation pending flag."""
+        print("\n=== Test: Thinking truncation in cache stats ===")
+
+        stats_before = get_cache_stats()
+        assert stats_before["thinking_truncation_pending"] is False
+        assert stats_before["total"] == 0
+
+        save_thinking_truncation()
+        stats_after = get_cache_stats()
+        assert stats_after["thinking_truncation_pending"] is True
+        assert stats_after["total"] == 1
+
+        print("✅ Test passed: Cache stats include thinking truncation")

@@ -92,15 +92,15 @@ def generate_truncation_tool_result(
 def generate_truncation_user_message() -> str:
     """
     Generate synthetic user message for content truncation.
-    
+
     Message is carefully worded to:
     - Acknowledge it's not model's fault
     - Suggest adaptation without specific instructions
     - NOT tell model to "break into steps" (causes micro-steps)
-    
+
     Returns:
         Synthetic user message text
-    
+
     Example:
         >>> generate_truncation_user_message()
         '[System Notice] Your previous response was truncated...'
@@ -109,4 +109,13 @@ def generate_truncation_user_message() -> str:
         "[System Notice] Your previous response was truncated by the API due to "
         "output size limitations. This is not an error on your part. "
         "If you need to continue, please adapt your approach rather than repeating the same output."
+    )
+
+
+def generate_thinking_truncation_user_message() -> str:
+    """Generate synthetic user message for thinking block truncation."""
+    return (
+        "[System Notice] Your previous response was truncated by the API while you were "
+        "still reasoning. No visible output was delivered to the user. "
+        "This is not an error on your part. Please provide your response again."
     )
