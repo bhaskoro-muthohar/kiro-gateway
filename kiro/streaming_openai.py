@@ -234,7 +234,24 @@ async def stream_kiro_to_openai_internal(
                 f"thinking_length={len(full_thinking_content)} chars, no visible content produced. "
                 f"{'Model will be notified automatically.' if TRUNCATION_RECOVERY else 'Set TRUNCATION_RECOVERY=true in .env to auto-notify model about truncation.'}"
             )
-        
+
+            # Inject visible content chunk so the client sees the truncation
+            from kiro.truncation_recovery import generate_thinking_truncation_user_message
+            notice_text = generate_thinking_truncation_user_message()
+            delta = {"content": notice_text}
+            if first_chunk:
+                delta["role"] = "assistant"
+                first_chunk = False
+            notice_chunk = {
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created_time,
+                "model": model,
+                "choices": [{"index": 0, "delta": delta, "finish_reason": None}]
+            }
+            yield f"data: {json.dumps(notice_chunk, ensure_ascii=False)}\n\n"
+            full_content += notice_text  # Include in token counting
+
         # Determine finish_reason
         finish_reason = "tool_calls" if all_tool_calls else "stop"
         
