@@ -210,13 +210,29 @@ async def stream_kiro_to_openai_internal(
             len(full_content) > 0 and
             not all_tool_calls  # Don't confuse with tool call truncation
         )
-        
+
+        # Detect thinking-only truncation
+        thinking_was_truncated = (
+            not stream_completed_normally and
+            len(full_thinking_content) > 0 and
+            len(full_content) == 0 and
+            not all_tool_calls
+        )
+
         if content_was_truncated:
             from kiro.config import TRUNCATION_RECOVERY
             logger.error(
                 f"Content truncated by Kiro API: stream ended without completion signals, "
                 f"length={len(full_content)} chars. "
                 f"{'Model will be notified automatically about truncation.' if TRUNCATION_RECOVERY else 'Set TRUNCATION_RECOVERY=true in .env to auto-notify model about truncation.'}"
+            )
+
+        if thinking_was_truncated:
+            from kiro.config import TRUNCATION_RECOVERY
+            logger.error(
+                f"Thinking block truncated by Kiro API: stream ended without completion signals, "
+                f"thinking_length={len(full_thinking_content)} chars, no visible content produced. "
+                f"{'Model will be notified automatically.' if TRUNCATION_RECOVERY else 'Set TRUNCATION_RECOVERY=true in .env to auto-notify model about truncation.'}"
             )
         
         # Determine finish_reason
@@ -285,8 +301,8 @@ async def stream_kiro_to_openai_internal(
         
         # Save truncation info for recovery (tracked by stable identifiers)
         from kiro.truncation_recovery import should_inject_recovery
-        from kiro.truncation_state import save_tool_truncation, save_content_truncation
-        
+        from kiro.truncation_state import save_tool_truncation, save_content_truncation, save_thinking_truncation
+
         if should_inject_recovery():
             # Save tool truncations (tracked by tool_call_id)
             truncated_count = 0
@@ -298,15 +314,20 @@ async def stream_kiro_to_openai_internal(
                         truncation_info=tc['_truncation_info']
                     )
                     truncated_count += 1
-            
+
             # Save content truncation (tracked by content hash)
             if content_was_truncated:
                 save_content_truncation(full_content)
-            
-            if truncated_count > 0 or content_was_truncated:
+
+            # Save thinking truncation (flag-based, no hash needed)
+            if thinking_was_truncated:
+                save_thinking_truncation()
+
+            if truncated_count > 0 or content_was_truncated or thinking_was_truncated:
                 logger.info(
                     f"Truncation detected: {truncated_count} tool(s), "
-                    f"content={content_was_truncated}. Will be handled when client sends next request."
+                    f"content={content_was_truncated}, thinking={thinking_was_truncated}. "
+                    f"Will be handled when client sends next request."
                 )
         
         # Final chunk with usage

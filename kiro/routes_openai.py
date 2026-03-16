@@ -241,10 +241,25 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
         
         modified_messages.append(msg)
     
+    # Check for thinking truncation (flag-based, not hash-based)
+    from kiro.truncation_state import get_thinking_truncation
+    from kiro.truncation_recovery import generate_thinking_truncation_user_message
+
+    if get_thinking_truncation():
+        synthetic_msg = ChatMessage(
+            role="user",
+            content=generate_thinking_truncation_user_message()
+        )
+        # Insert before the last message (which is the new user prompt)
+        modified_messages.insert(len(modified_messages) - 1, synthetic_msg)
+        content_notices_added += 1
+        logger.debug("Added thinking truncation notice")
+        request_data.messages = modified_messages
+
     if tool_results_modified > 0 or content_notices_added > 0:
         request_data.messages = modified_messages
         logger.info(f"Truncation recovery: modified {tool_results_modified} tool_result(s), added {content_notices_added} content notice(s)")
-    
+
     # Generate conversation ID for Kiro API (random UUID, not used for tracking)
     conversation_id = generate_conversation_id()
     

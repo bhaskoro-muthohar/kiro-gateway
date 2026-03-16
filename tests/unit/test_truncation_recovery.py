@@ -18,7 +18,8 @@ import pytest
 from kiro.truncation_recovery import (
     should_inject_recovery,
     generate_truncation_tool_result,
-    generate_truncation_user_message
+    generate_truncation_user_message,
+    generate_thinking_truncation_user_message,
 )
 
 
@@ -344,5 +345,33 @@ class TestMessageIntegration:
         assert len(conversation) == 3, "Should have 3 messages"
         assert conversation[-1]["role"] == "user", "Last message should be user"
         assert "[System Notice]" in conversation[-1]["content"], "Should contain system notice"
-        
+
         print("✅ Test passed: Insertion works correctly")
+
+
+class TestThinkingTruncationMessage:
+    """Test suite for thinking truncation message generation."""
+
+    def test_generate_thinking_truncation_user_message(self):
+        """Verify the thinking truncation message has expected content."""
+        print("\n=== Test: Generate thinking truncation message ===")
+
+        message = generate_thinking_truncation_user_message()
+
+        assert isinstance(message, str)
+        assert "[System Notice]" in message
+        assert "truncated" in message.lower()
+        assert "reasoning" in message.lower()
+        assert "no visible output" in message.lower()
+        assert "not an error on your part" in message.lower()
+        assert "provide your response again" in message.lower()
+
+        print(f"Message: {message}")
+        print("✅ Test passed: Thinking truncation message format correct")
+
+    def test_generate_thinking_truncation_user_message_consistency(self):
+        """Same message generated each time."""
+        msg1 = generate_thinking_truncation_user_message()
+        msg2 = generate_thinking_truncation_user_message()
+        assert msg1 == msg2, "Should be deterministic"
+        print("✅ Test passed: Thinking truncation message is consistent")

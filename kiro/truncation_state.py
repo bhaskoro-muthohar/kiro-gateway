@@ -75,6 +75,7 @@ class ContentTruncationInfo:
 # No TTL - if user takes a break for hours, truncation info should still be available
 _tool_truncation_cache: Dict[str, ToolTruncationInfo] = {}
 _content_truncation_cache: Dict[str, ContentTruncationInfo] = {}
+_thinking_truncation_pending: bool = False
 _cache_lock = Lock()
 
 
@@ -192,6 +193,25 @@ def get_content_truncation(content: str) -> Optional[ContentTruncationInfo]:
 
 
 
+def save_thinking_truncation() -> None:
+    """Save flag that a thinking block was truncated (response was empty)."""
+    global _thinking_truncation_pending
+    with _cache_lock:
+        _thinking_truncation_pending = True
+        logger.debug("Saved thinking truncation flag")
+
+
+def get_thinking_truncation() -> bool:
+    """Get and clear the thinking truncation flag. One-time retrieval."""
+    global _thinking_truncation_pending
+    with _cache_lock:
+        was_pending = _thinking_truncation_pending
+        _thinking_truncation_pending = False
+        if was_pending:
+            logger.debug("Retrieved thinking truncation flag")
+        return was_pending
+
+
 def get_cache_stats() -> Dict[str, int]:
     """
     Get current cache statistics.
@@ -210,5 +230,6 @@ def get_cache_stats() -> Dict[str, int]:
         return {
             "tool_truncations": len(_tool_truncation_cache),
             "content_truncations": len(_content_truncation_cache),
-            "total": len(_tool_truncation_cache) + len(_content_truncation_cache)
+            "thinking_truncation_pending": _thinking_truncation_pending,
+            "total": len(_tool_truncation_cache) + len(_content_truncation_cache) + int(_thinking_truncation_pending)
         }

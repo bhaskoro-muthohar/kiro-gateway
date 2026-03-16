@@ -445,13 +445,29 @@ async def stream_kiro_to_anthropic(
             len(full_content) > 0 and
             not tool_blocks  # Don't confuse with tool call truncation
         )
-        
+
+        # Detect thinking-only truncation
+        thinking_was_truncated = (
+            not stream_completed_normally and
+            len(full_thinking_content) > 0 and
+            len(full_content) == 0 and
+            not tool_blocks
+        )
+
         if content_was_truncated:
             from kiro.config import TRUNCATION_RECOVERY
             logger.error(
                 f"Content truncated by Kiro API: stream ended without completion signals, "
                 f"length={len(full_content)} chars. "
                 f"{'Model will be notified automatically about truncation.' if TRUNCATION_RECOVERY else 'Set TRUNCATION_RECOVERY=true in .env to auto-notify model about truncation.'}"
+            )
+
+        if thinking_was_truncated:
+            from kiro.config import TRUNCATION_RECOVERY
+            logger.error(
+                f"Thinking block truncated by Kiro API: stream ended without completion signals, "
+                f"thinking_length={len(full_thinking_content)} chars, no visible content produced. "
+                f"{'Model will be notified automatically.' if TRUNCATION_RECOVERY else 'Set TRUNCATION_RECOVERY=true in .env to auto-notify model about truncation.'}"
             )
         
         # Calculate output tokens
@@ -486,8 +502,8 @@ async def stream_kiro_to_anthropic(
         
         # Save truncation info for recovery (tracked by stable identifiers)
         from kiro.truncation_recovery import should_inject_recovery
-        from kiro.truncation_state import save_tool_truncation, save_content_truncation
-        
+        from kiro.truncation_state import save_tool_truncation, save_content_truncation, save_thinking_truncation
+
         if should_inject_recovery():
             # Save tool truncations (tracked by tool_call_id)
             if truncated_tools:
@@ -497,15 +513,20 @@ async def stream_kiro_to_anthropic(
                         tool_name=truncated_tool["name"],
                         truncation_info=truncated_tool["truncation_info"]
                     )
-            
+
             # Save content truncation (tracked by content hash)
             if content_was_truncated:
                 save_content_truncation(full_content)
-            
-            if truncated_tools or content_was_truncated:
+
+            # Save thinking truncation (flag-based, no hash needed)
+            if thinking_was_truncated:
+                save_thinking_truncation()
+
+            if truncated_tools or content_was_truncated or thinking_was_truncated:
                 logger.info(
                     f"Truncation detected: {len(truncated_tools)} tool(s), "
-                    f"content={content_was_truncated}. Will be handled when client sends next request."
+                    f"content={content_was_truncated}, thinking={thinking_was_truncated}. "
+                    f"Will be handled when client sends next request."
                 )
         
         logger.debug(
