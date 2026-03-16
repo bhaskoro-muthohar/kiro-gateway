@@ -469,7 +469,36 @@ async def stream_kiro_to_anthropic(
                 f"thinking_length={len(full_thinking_content)} chars, no visible content produced. "
                 f"{'Model will be notified automatically.' if TRUNCATION_RECOVERY else 'Set TRUNCATION_RECOVERY=true in .env to auto-notify model about truncation.'}"
             )
-        
+
+            # Inject visible text block so the client sees the truncation
+            # Without this, the client receives an empty response and has no idea what happened
+            from kiro.truncation_recovery import generate_thinking_truncation_user_message
+            notice_text = generate_thinking_truncation_user_message()
+            if not text_block_started:
+                text_block_index = current_block_index
+                yield format_sse_event("content_block_start", {
+                    "type": "content_block_start",
+                    "index": text_block_index,
+                    "content_block": {
+                        "type": "text",
+                        "text": ""
+                    }
+                })
+                text_block_started = True
+            yield format_sse_event("content_block_delta", {
+                "type": "content_block_delta",
+                "index": text_block_index,
+                "delta": {
+                    "type": "text_delta",
+                    "text": notice_text
+                }
+            })
+            yield format_sse_event("content_block_stop", {
+                "type": "content_block_stop",
+                "index": text_block_index
+            })
+            current_block_index += 1
+
         # Calculate output tokens
         output_tokens = count_tokens(full_content + full_thinking_content)
         

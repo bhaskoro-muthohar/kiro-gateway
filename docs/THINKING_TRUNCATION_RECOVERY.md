@@ -31,6 +31,15 @@ This fires when:
 
 An ERROR-level log is emitted when this is detected.
 
+### Immediate Visible Notice (in-stream)
+
+When thinking truncation is detected, a **visible text block** is injected directly into the stream response so the client/user immediately sees what happened instead of receiving a silent empty response:
+
+- **Anthropic adapter**: Emits `content_block_start` → `content_block_delta` (with notice text) → `content_block_stop`
+- **OpenAI adapter**: Emits a `chat.completion.chunk` with `delta.content` containing the notice text
+
+This ensures the user sees the `[System Notice]` in their chat UI rather than a blank response.
+
 ### State Tracking (`truncation_state.py`)
 
 A simple boolean flag (no hash needed since the assistant message is empty):
@@ -58,8 +67,8 @@ On the next request, if the thinking truncation flag is set, a synthetic user me
 
 | File | Change |
 |------|--------|
-| `kiro/streaming_anthropic.py` | `thinking_was_truncated` detection, logging, recovery save |
-| `kiro/streaming_openai.py` | Same detection pattern |
+| `kiro/streaming_anthropic.py` | `thinking_was_truncated` detection, logging, visible notice injection, recovery save |
+| `kiro/streaming_openai.py` | Same detection pattern + visible notice injection |
 | `kiro/truncation_state.py` | `save_thinking_truncation()`, `get_thinking_truncation()` |
 | `kiro/truncation_recovery.py` | `generate_thinking_truncation_user_message()` |
 | `kiro/routes_anthropic.py` | Inject thinking truncation recovery message |
@@ -72,5 +81,7 @@ This feature uses the existing `TRUNCATION_RECOVERY` config flag (`.env`). When 
 ## Verification
 
 - `pytest tests/unit/ -v` — all existing + new tests pass (8 new tests added)
-- When a thinking-only response is truncated, an `ERROR` log appears with `thinking_length=N chars`
-- On the next request, `[System Notice]` is injected into the message history
+- When a thinking-only response is truncated:
+  1. An `ERROR` log appears with `thinking_length=N chars`
+  2. The client immediately sees a `[System Notice]` text in the response (visible to user)
+  3. On the next request, a synthetic user message is also injected into the conversation history so the model knows what happened
