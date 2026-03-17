@@ -40,7 +40,10 @@ from kiro.config import (
     TOOL_DESCRIPTION_MAX_LENGTH,
     FAKE_REASONING_ENABLED,
     FAKE_REASONING_MAX_TOKENS,
+    KIRO_MAX_PAYLOAD_BYTES,
+    AUTO_TRIM_PAYLOAD,
 )
+from kiro.payload_guards import check_payload_size, trim_payload_to_limit
 
 
 # ==================================================================================================
@@ -1518,5 +1521,20 @@ def build_kiro_payload(
     # Add profileArn
     if profile_arn:
         payload["profileArn"] = profile_arn
-    
+
+    # Payload size guard — detect and handle oversized payloads before sending
+    payload_size = check_payload_size(payload)
+    if payload_size > KIRO_MAX_PAYLOAD_BYTES:
+        if AUTO_TRIM_PAYLOAD:
+            stats = trim_payload_to_limit(payload, KIRO_MAX_PAYLOAD_BYTES)
+            logger.warning(
+                f"[PayloadGuard] Payload trimmed: {stats.original_bytes} -> {stats.final_bytes} bytes, "
+                f"history {stats.original_entries} -> {stats.final_entries} entries"
+            )
+        else:
+            logger.error(
+                f"[PayloadGuard] Payload size {payload_size} bytes exceeds limit "
+                f"{KIRO_MAX_PAYLOAD_BYTES} bytes. Use /compact or start a new session."
+            )
+
     return KiroPayloadResult(payload=payload, tool_documentation=tool_documentation)

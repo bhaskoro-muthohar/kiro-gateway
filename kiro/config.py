@@ -446,6 +446,18 @@ FAKE_REASONING_INITIAL_BUFFER_SIZE: int = int(os.getenv("FAKE_REASONING_INITIAL_
 
 
 # ==================================================================================================
+# Payload Size Guard Settings
+# ==================================================================================================
+
+# Payload size limit in bytes (Kiro API rejects > ~615KB with cryptic 400 error)
+# Default 600KB provides safety margin below the ~615KB hard limit
+KIRO_MAX_PAYLOAD_BYTES: int = int(os.getenv("KIRO_MAX_PAYLOAD_BYTES", "600000"))
+
+# Auto-trim payload when over limit (default: true)
+# When false, returns a clear error instead of trimming
+AUTO_TRIM_PAYLOAD: bool = os.getenv("AUTO_TRIM_PAYLOAD", "true").lower() in ("true", "1", "yes")
+
+# ==================================================================================================
 # Application Version
 # ==================================================================================================
 
