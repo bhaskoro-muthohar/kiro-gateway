@@ -149,6 +149,22 @@ def mock_kiro_models_response():
                     "maxInputTokens": 200000,
                     "maxOutputTokens": 8192
                 }
+            },
+            {
+                "modelId": "claude-sonnet-4.6",
+                "displayName": "Claude Sonnet 4.6",
+                "tokenLimits": {
+                    "maxInputTokens": 1000000,
+                    "maxOutputTokens": 16384
+                }
+            },
+            {
+                "modelId": "claude-opus-4.6",
+                "displayName": "Claude Opus 4.6",
+                "tokenLimits": {
+                    "maxInputTokens": 1000000,
+                    "maxOutputTokens": 16384
+                }
             }
         ]
     }
@@ -504,6 +520,22 @@ def sample_models_data():
             "tokenLimits": {
                 "maxInputTokens": 100000,
                 "maxOutputTokens": 4096
+            }
+        },
+        {
+            "modelId": "claude-sonnet-4.6",
+            "displayName": "Claude Sonnet 4.6",
+            "tokenLimits": {
+                "maxInputTokens": 1000000,
+                "maxOutputTokens": 16384
+            }
+        },
+        {
+            "modelId": "claude-opus-4.6",
+            "displayName": "Claude Opus 4.6",
+            "tokenLimits": {
+                "maxInputTokens": 1000000,
+                "maxOutputTokens": 16384
             }
         }
     ]

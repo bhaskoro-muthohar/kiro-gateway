@@ -572,17 +572,34 @@ class TestFallbackModelsConfig:
     def test_fallback_models_contain_claude_models(self):
         """
         What it does: Verifies that fallback models include Claude models.
-        Purpose: Ensure fallback list contains expected Claude 4/4.5 models.
+        Purpose: Ensure fallback list contains expected Claude 4/4.5/4.6 models.
         """
         print("Setup: Importing FALLBACK_MODELS...")
         from kiro.config import FALLBACK_MODELS
-        
+
         model_ids = [m["modelId"] for m in FALLBACK_MODELS]
         print(f"Model IDs in fallback list: {model_ids}")
-        
+
         print("Verification: Contains at least one Claude model...")
         has_claude = any("claude" in mid.lower() for mid in model_ids)
         assert has_claude, "No Claude models in fallback list"
+
+    def test_fallback_models_contain_4_6_models(self):
+        """
+        What it does: Verifies that fallback models include Claude 4.6 models.
+        Purpose: Ensure fallback list contains Opus 4.6 and Sonnet 4.6 (1M context).
+        """
+        print("Setup: Importing FALLBACK_MODELS...")
+        from kiro.config import FALLBACK_MODELS
+
+        model_ids = [m["modelId"] for m in FALLBACK_MODELS]
+        print(f"Model IDs in fallback list: {model_ids}")
+
+        print("Verification: Contains claude-sonnet-4.6...")
+        assert "claude-sonnet-4.6" in model_ids, "claude-sonnet-4.6 missing from fallback list"
+
+        print("Verification: Contains claude-opus-4.6...")
+        assert "claude-opus-4.6" in model_ids, "claude-opus-4.6 missing from fallback list"
     
     def test_fallback_models_use_dot_format(self):
         """
@@ -637,6 +654,8 @@ class TestFallbackModelsIntegration:
             ("claude-opus-4-5", "claude-opus-4.5"),  # Dash → Dot
             ("claude-sonnet-4-5", "claude-sonnet-4.5"),  # Dash → Dot
             ("claude-haiku-4-5", "claude-haiku-4.5"),  # Dash → Dot
+            ("claude-opus-4-6", "claude-opus-4.6"),  # Dash → Dot (4.6, 1M context)
+            ("claude-sonnet-4-6", "claude-sonnet-4.6"),  # Dash → Dot (4.6, 1M context)
         ]
         
         for input_name, expected_normalized in test_cases:

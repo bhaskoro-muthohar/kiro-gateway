@@ -43,6 +43,8 @@ def mock_model_cache():
         "claude-sonnet-4": {"modelId": "claude-sonnet-4", "modelName": "Claude Sonnet 4"},
         "claude-haiku-4.5": {"modelId": "claude-haiku-4.5", "modelName": "Claude Haiku 4.5"},
         "claude-opus-4.5": {"modelId": "claude-opus-4.5", "modelName": "Claude Opus 4.5"},
+        "claude-sonnet-4.6": {"modelId": "claude-sonnet-4.6", "modelName": "Claude Sonnet 4.6"},
+        "claude-opus-4.6": {"modelId": "claude-opus-4.6", "modelName": "Claude Opus 4.6"},
     }
     return cache
 
@@ -337,6 +339,85 @@ class TestNormalizeModelName:
         print(f"Comparing result: Expected 'claude-opus-4.5', Got '{result}'")
         assert result == "claude-opus-4.5"
     
+    # === Claude 4.6 models (1M context) ===
+
+    def test_normalizes_opus_4_6_dash_to_dot(self):
+        """
+        What it does: claude-opus-4-6 → claude-opus-4.6
+        Goal: Check dash-to-dot conversion for new Opus 4.6 model.
+        """
+        print("Action: Normalizing 'claude-opus-4-6'...")
+        result = normalize_model_name("claude-opus-4-6")
+
+        print(f"Comparing result: Expected 'claude-opus-4.6', Got '{result}'")
+        assert result == "claude-opus-4.6"
+
+    def test_normalizes_sonnet_4_6_dash_to_dot(self):
+        """
+        What it does: claude-sonnet-4-6 → claude-sonnet-4.6
+        Goal: Check dash-to-dot conversion for new Sonnet 4.6 model.
+        """
+        print("Action: Normalizing 'claude-sonnet-4-6'...")
+        result = normalize_model_name("claude-sonnet-4-6")
+
+        print(f"Comparing result: Expected 'claude-sonnet-4.6', Got '{result}'")
+        assert result == "claude-sonnet-4.6"
+
+    def test_strips_date_suffix_opus_4_6(self):
+        """
+        What it does: claude-opus-4-6-20260301 → claude-opus-4.6
+        Goal: Check date suffix removal for Opus 4.6.
+        """
+        print("Action: Normalizing 'claude-opus-4-6-20260301'...")
+        result = normalize_model_name("claude-opus-4-6-20260301")
+
+        print(f"Comparing result: Expected 'claude-opus-4.6', Got '{result}'")
+        assert result == "claude-opus-4.6"
+
+    def test_strips_latest_suffix_sonnet_4_6(self):
+        """
+        What it does: claude-sonnet-4-6-latest → claude-sonnet-4.6
+        Goal: Check 'latest' suffix removal for Sonnet 4.6.
+        """
+        print("Action: Normalizing 'claude-sonnet-4-6-latest'...")
+        result = normalize_model_name("claude-sonnet-4-6-latest")
+
+        print(f"Comparing result: Expected 'claude-sonnet-4.6', Got '{result}'")
+        assert result == "claude-sonnet-4.6"
+
+    def test_inverted_format_opus_4_6(self):
+        """
+        What it does: claude-4.6-opus-high → claude-opus-4.6
+        Goal: Check inverted Cursor IDE format for Opus 4.6.
+        """
+        print("Action: Normalizing 'claude-4.6-opus-high'...")
+        result = normalize_model_name("claude-4.6-opus-high")
+
+        print(f"Comparing result: Expected 'claude-opus-4.6', Got '{result}'")
+        assert result == "claude-opus-4.6"
+
+    def test_passthrough_already_normalized_opus_4_6(self):
+        """
+        What it does: claude-opus-4.6 → claude-opus-4.6
+        Goal: Check that already normalized 4.6 models are unchanged.
+        """
+        print("Action: Normalizing 'claude-opus-4.6'...")
+        result = normalize_model_name("claude-opus-4.6")
+
+        print(f"Comparing result: Expected 'claude-opus-4.6', Got '{result}'")
+        assert result == "claude-opus-4.6"
+
+    def test_passthrough_already_normalized_sonnet_4_6(self):
+        """
+        What it does: claude-sonnet-4.6 → claude-sonnet-4.6
+        Goal: Check that already normalized 4.6 models are unchanged.
+        """
+        print("Action: Normalizing 'claude-sonnet-4.6'...")
+        result = normalize_model_name("claude-sonnet-4.6")
+
+        print(f"Comparing result: Expected 'claude-sonnet-4.6', Got '{result}'")
+        assert result == "claude-sonnet-4.6"
+
     # === Already normalized (passthrough) ===
     
     def test_passthrough_already_normalized_haiku(self):
