@@ -67,8 +67,16 @@ def convert_anthropic_content_to_text(content: Any) -> str:
             if isinstance(block, dict):
                 if block.get("type") == "text":
                     text_parts.append(block.get("text", ""))
-            elif hasattr(block, "type") and block.type == "text":
-                text_parts.append(block.text)
+                elif block.get("type") == "document":
+                    source = block.get("source", {})
+                    media_type = source.get("media_type", "unknown")
+                    logger.debug(f"Document content block skipped (media_type={media_type})")
+            elif hasattr(block, "type"):
+                if block.type == "text":
+                    text_parts.append(block.text)
+                elif block.type == "document":
+                    media_type = getattr(getattr(block, "source", None), "media_type", "unknown")
+                    logger.debug(f"Document content block skipped (media_type={media_type})")
         return "".join(text_parts)
 
     return str(content) if content else ""

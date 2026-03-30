@@ -152,6 +152,45 @@ class TestConvertAnthropicContentToText:
         print(f"Comparing result: Expected '42', Got '{result}'")
         assert result == "42"
 
+    def test_skips_document_blocks_dict(self):
+        """
+        What it does: Verifies document blocks (dict format) are skipped during text extraction.
+        Purpose: Ensure PDF document blocks from Claude Code don't pollute text output.
+        """
+        print("Setup: Content with document block as dict...")
+        content = [
+            {"type": "text", "text": "PDF file read: test.pdf (222.6KB)"},
+            {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": "JVBERi0="}},
+        ]
+
+        print("Action: Extracting text...")
+        result = convert_anthropic_content_to_text(content)
+
+        print(f"Comparing result: Expected 'PDF file read: test.pdf (222.6KB)', Got '{result}'")
+        assert result == "PDF file read: test.pdf (222.6KB)"
+
+    def test_skips_document_blocks_pydantic(self):
+        """
+        What it does: Verifies document blocks (Pydantic model) are skipped during text extraction.
+        Purpose: Ensure Pydantic-parsed document blocks are handled correctly.
+        """
+        from kiro.models_anthropic import DocumentContentBlock, Base64DocumentSource
+
+        print("Setup: Content with document block as Pydantic model...")
+        content = [
+            TextContentBlock(text="Before doc"),
+            DocumentContentBlock(
+                source=Base64DocumentSource(media_type="application/pdf", data="JVBERi0=")
+            ),
+            TextContentBlock(text=" After doc"),
+        ]
+
+        print("Action: Extracting text...")
+        result = convert_anthropic_content_to_text(content)
+
+        print(f"Comparing result: Expected 'Before doc After doc', Got '{result}'")
+        assert result == "Before doc After doc"
+
 
 # ==================================================================================================
 # Tests for extract_system_prompt
@@ -596,6 +635,37 @@ class TestExtractToolResultsFromAnthropicContent:
         assert len(result) == 1
         # Text is preserved, images are extracted separately
         assert result[0]["content"] == "Screenshot captured"
+
+    def test_tool_result_with_document_in_content(self):
+        """
+        What it does: Verifies tool results containing document blocks extract text correctly.
+        Purpose: Ensure document blocks inside tool_result.content are skipped gracefully.
+        """
+        print("Setup: Tool result with text and document block...")
+        content = [
+            {
+                "type": "tool_result",
+                "tool_use_id": "call_pdf",
+                "content": [
+                    {"type": "text", "text": "PDF file read: bank_statement.pdf (222.6KB)"},
+                    {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "application/pdf",
+                            "data": "JVBERi0xLjQ=",
+                        },
+                    },
+                ],
+            }
+        ]
+
+        print("Action: Extracting tool results...")
+        result = extract_tool_results_from_anthropic_content(content)
+
+        print(f"Result: {result}")
+        assert len(result) == 1
+        assert result[0]["content"] == "PDF file read: bank_statement.pdf (222.6KB)"
 
 
 # ==================================================================================================
@@ -1306,6 +1376,46 @@ class TestConvertAnthropicMessages:
         # The function logs "Converted X Anthropic messages: Y tool_calls, Z tool_results, W images"
         # We verify the images are extracted correctly, which proves the counting works
         print("Images extracted successfully - logging verification complete")
+
+    def test_converts_message_with_document_block(self):
+        """
+        What it does: Verifies full message conversion handles document blocks without error.
+        Purpose: End-to-end test for the exact payload Claude Code sends when reading PDFs.
+        """
+        print("Setup: User message with tool_result and document block (real-world PDF payload)...")
+        messages = [
+            AnthropicMessage(
+                role="user",
+                content=[
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "tooluse_abc123",
+                        "content": "PDF file read: /Users/test/Jago_History.pdf (222.6KB)",
+                    },
+                    {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "application/pdf",
+                            "data": "JVBERi0xLjQKMSAwIG9iago=",
+                        },
+                    },
+                ],
+            )
+        ]
+
+        print("Action: Converting messages...")
+        result = convert_anthropic_messages(messages)
+
+        print(f"Result: {result}")
+        assert len(result) == 1
+        assert result[0].role == "user"
+        # Document block is skipped, no text from it
+        assert result[0].content == ""
+        # Tool result is extracted
+        assert result[0].tool_results is not None
+        assert len(result[0].tool_results) == 1
+        assert result[0].tool_results[0]["tool_use_id"] == "tooluse_abc123"
 
 
 # ==================================================================================================

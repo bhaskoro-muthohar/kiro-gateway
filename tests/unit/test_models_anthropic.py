@@ -22,6 +22,9 @@ from kiro.models_anthropic import (
     ToolUseContentBlock,
     ToolResultContentBlock,
     ToolReferenceContentBlock,
+    # Document models
+    Base64DocumentSource,
+    DocumentContentBlock,
     # Image models
     Base64ImageSource,
     URLImageSource,
@@ -1052,6 +1055,200 @@ class TestToolReferenceContentBlock:
 
         print(f"Comparing type: Expected 'tool_reference', Got '{block.type}'")
         assert block.type == "tool_reference"
+
+
+# ==================================================================================================
+# Tests for DocumentContentBlock
+# ==================================================================================================
+
+
+class TestBase64DocumentSource:
+    """Tests for Base64DocumentSource Pydantic model."""
+
+    def test_valid_document_source(self):
+        """
+        What it does: Verifies creation of valid Base64DocumentSource.
+        Purpose: Ensure model accepts valid document source data.
+        """
+        print("Setup: Creating Base64DocumentSource with valid data...")
+        source = Base64DocumentSource(
+            media_type="application/pdf",
+            data="JVBERi0xLjQ="
+        )
+
+        print(f"Comparing type: Expected 'base64', Got '{source.type}'")
+        assert source.type == "base64"
+
+        print(f"Comparing media_type: Got '{source.media_type}'")
+        assert source.media_type == "application/pdf"
+
+        print(f"Comparing data length: Got {len(source.data)}")
+        assert source.data == "JVBERi0xLjQ="
+
+    def test_type_defaults_to_base64(self):
+        """
+        What it does: Verifies that type defaults to "base64".
+        Purpose: Ensure default value is set correctly.
+        """
+        print("Setup: Creating Base64DocumentSource without explicit type...")
+        source = Base64DocumentSource(media_type="application/pdf", data="abc")
+
+        print(f"Comparing type: Expected 'base64', Got '{source.type}'")
+        assert source.type == "base64"
+
+    def test_requires_media_type(self):
+        """
+        What it does: Verifies that media_type is required.
+        Purpose: Ensure validation fails without media_type.
+        """
+        print("Setup: Attempting to create Base64DocumentSource without media_type...")
+
+        with pytest.raises(ValidationError) as exc_info:
+            Base64DocumentSource(data="abc")
+
+        print(f"ValidationError raised: {exc_info.value}")
+        assert "media_type" in str(exc_info.value)
+
+    def test_requires_data(self):
+        """
+        What it does: Verifies that data is required.
+        Purpose: Ensure validation fails without data.
+        """
+        print("Setup: Attempting to create Base64DocumentSource without data...")
+
+        with pytest.raises(ValidationError) as exc_info:
+            Base64DocumentSource(media_type="application/pdf")
+
+        print(f"ValidationError raised: {exc_info.value}")
+        assert "data" in str(exc_info.value)
+
+
+class TestDocumentContentBlock:
+    """Tests for DocumentContentBlock Pydantic model."""
+
+    def test_valid_document_block(self):
+        """
+        What it does: Verifies creation of valid DocumentContentBlock.
+        Purpose: Ensure model accepts valid document data.
+        """
+        print("Setup: Creating DocumentContentBlock with valid data...")
+        block = DocumentContentBlock(
+            source=Base64DocumentSource(
+                media_type="application/pdf",
+                data="JVBERi0xLjQ="
+            )
+        )
+
+        print(f"Comparing type: Expected 'document', Got '{block.type}'")
+        assert block.type == "document"
+
+        print(f"Comparing source.media_type: Got '{block.source.media_type}'")
+        assert block.source.media_type == "application/pdf"
+
+    def test_type_defaults_to_document(self):
+        """
+        What it does: Verifies that type defaults to "document".
+        Purpose: Ensure default value is set correctly.
+        """
+        print("Setup: Creating DocumentContentBlock without explicit type...")
+        block = DocumentContentBlock(
+            source=Base64DocumentSource(media_type="application/pdf", data="abc")
+        )
+
+        print(f"Comparing type: Expected 'document', Got '{block.type}'")
+        assert block.type == "document"
+
+    def test_requires_source(self):
+        """
+        What it does: Verifies that source is required.
+        Purpose: Ensure validation fails without source.
+        """
+        print("Setup: Attempting to create DocumentContentBlock without source...")
+
+        with pytest.raises(ValidationError) as exc_info:
+            DocumentContentBlock()
+
+        print(f"ValidationError raised: {exc_info.value}")
+        assert "source" in str(exc_info.value)
+
+    def test_allows_extra_fields(self):
+        """
+        What it does: Verifies extra fields are allowed.
+        Purpose: Ensure forward compatibility with new fields from Claude Code.
+        """
+        print("Setup: Creating DocumentContentBlock with extra fields...")
+        block = DocumentContentBlock(
+            source=Base64DocumentSource(media_type="application/pdf", data="abc"),
+            some_future_field="value"
+        )
+
+        print(f"Comparing type: Got '{block.type}'")
+        assert block.type == "document"
+
+    def test_content_block_union_accepts_document(self):
+        """
+        What it does: Verifies ContentBlock union accepts DocumentContentBlock.
+        Purpose: Ensure union includes document blocks.
+        """
+        print("Setup: Creating DocumentContentBlock as ContentBlock...")
+        block: ContentBlock = DocumentContentBlock(
+            source=Base64DocumentSource(media_type="application/pdf", data="abc")
+        )
+
+        print(f"Comparing type: Expected 'document', Got '{block.type}'")
+        assert block.type == "document"
+
+    def test_tool_result_accepts_document_in_content(self):
+        """
+        What it does: Verifies ToolResultContentBlock accepts DocumentContentBlock in content list.
+        Purpose: Ensure document blocks work inside tool results (Claude Code PDF reading).
+        """
+        print("Setup: Creating ToolResultContentBlock with document in content...")
+        block = ToolResultContentBlock(
+            tool_use_id="call_123",
+            content=[
+                TextContentBlock(text="PDF file read: test.pdf (100KB)"),
+                DocumentContentBlock(
+                    source=Base64DocumentSource(
+                        media_type="application/pdf",
+                        data="JVBERi0xLjQ="
+                    )
+                ),
+            ]
+        )
+
+        print(f"Comparing content length: Expected 2, Got {len(block.content)}")
+        assert len(block.content) == 2
+        assert block.content[0].type == "text"
+        assert block.content[1].type == "document"
+
+    def test_message_with_document_block(self):
+        """
+        What it does: Verifies AnthropicMessage accepts document blocks in content.
+        Purpose: Ensure the exact payload Claude Code sends for PDFs is accepted.
+        """
+        print("Setup: Creating AnthropicMessage with document block (real-world payload)...")
+        msg = AnthropicMessage(
+            role="user",
+            content=[
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "tooluse_abc123",
+                    "content": "PDF file read: /Users/test/Downloads/Jago_History.pdf (222.6KB)",
+                },
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": "JVBERi0xLjQKMSAwIG9iago=",
+                    },
+                },
+            ],
+        )
+
+        print(f"Comparing content length: Expected 2, Got {len(msg.content)}")
+        assert len(msg.content) == 2
 
 
 # ==================================================================================================

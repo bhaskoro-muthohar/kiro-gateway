@@ -298,6 +298,24 @@ class TestExtractTextContent:
         print(f"Comparing result: Expected 'Loaded tools: done', Got '{result}'")
         assert result == "Loaded tools: done"
 
+    def test_skips_document_blocks(self):
+        """
+        What it does: Verifies that document blocks are skipped during text extraction.
+        Purpose: Ensure PDF document blocks from Claude Code don't pollute text output.
+        """
+        print("Setup: Content with document blocks...")
+        content = [
+            {"type": "text", "text": "PDF file read: test.pdf"},
+            {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": "JVBERi0="}},
+            {"type": "text", "text": " done"}
+        ]
+
+        print("Action: Extracting text...")
+        result = extract_text_content(content)
+
+        print(f"Comparing result: Expected 'PDF file read: test.pdf done', Got '{result}'")
+        assert result == "PDF file read: test.pdf done"
+
 
 # ==================================================================================================
 # Tests for extract_images_from_content (Issue #30 fix)

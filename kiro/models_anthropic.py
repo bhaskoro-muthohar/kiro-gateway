@@ -92,6 +92,40 @@ class ToolReferenceContentBlock(BaseModel):
     model_config = {"extra": "allow"}
 
 
+class Base64DocumentSource(BaseModel):
+    """
+    Base64-encoded document source in Anthropic format.
+
+    Attributes:
+        type: Always "base64"
+        media_type: MIME type (e.g., "application/pdf")
+        data: Base64-encoded document data
+    """
+
+    type: Literal["base64"] = "base64"
+    media_type: str
+    data: str
+
+
+class DocumentContentBlock(BaseModel):
+    """
+    Document content block in Anthropic format.
+
+    Sent by Claude Code when reading PDF files via the Read tool.
+    The Kiro API does not support document blocks natively, so these
+    are accepted at the validation layer and skipped during conversion.
+
+    Attributes:
+        type: Always "document"
+        source: Document source (base64-encoded)
+    """
+
+    type: Literal["document"] = "document"
+    source: Base64DocumentSource
+
+    model_config = {"extra": "allow"}
+
+
 class ToolResultContentBlock(BaseModel):
     """
     Tool result content block in Anthropic format.
@@ -103,7 +137,7 @@ class ToolResultContentBlock(BaseModel):
     type: Literal["tool_result"] = "tool_result"
     tool_use_id: str
     content: Optional[
-        Union[str, List[Union["TextContentBlock", "ImageContentBlock", "ToolReferenceContentBlock"]]]
+        Union[str, List[Union["TextContentBlock", "ImageContentBlock", "ToolReferenceContentBlock", "DocumentContentBlock"]]]
     ] = None
     is_error: Optional[bool] = None
 
@@ -167,6 +201,7 @@ ContentBlock = Union[
     TextContentBlock,
     ThinkingContentBlock,
     ImageContentBlock,
+    DocumentContentBlock,
     ToolUseContentBlock,
     ToolResultContentBlock,
     ToolReferenceContentBlock,
