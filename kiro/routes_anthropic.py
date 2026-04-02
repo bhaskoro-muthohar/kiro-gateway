@@ -396,7 +396,8 @@ async def messages(
                         request_data.model,
                         model_cache,
                         auth_manager,
-                        request_messages=messages_for_tokenizer
+                        request_messages=messages_for_tokenizer,
+                        request_tools=tools_for_tokenizer
                     ):
                         yield chunk
                 except GeneratorExit:

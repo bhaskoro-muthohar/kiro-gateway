@@ -105,6 +105,7 @@ async def stream_kiro_to_anthropic(
     auth_manager: "KiroAuthManager",
     first_token_timeout: float = FIRST_TOKEN_TIMEOUT,
     request_messages: Optional[list] = None,
+    request_tools: Optional[list] = None,
     conversation_id: Optional[str] = None
 ) -> AsyncGenerator[str, None]:
     """
@@ -120,6 +121,7 @@ async def stream_kiro_to_anthropic(
         auth_manager: Authentication manager
         first_token_timeout: First token wait timeout (seconds)
         request_messages: Original request messages (for token counting)
+        request_tools: Original request tools (for fallback token counting)
         conversation_id: Stable conversation ID for truncation recovery (optional)
     
     Yields:
@@ -508,6 +510,12 @@ async def stream_kiro_to_anthropic(
                 context_usage_percentage, output_tokens, model_cache, model
             )
             input_tokens = prompt_tokens
+        elif request_messages:
+            # Fallback: Kiro API didn't return context_usage, use tiktoken
+            # Include tool definitions for more accurate estimate (parity with OpenAI path)
+            input_tokens = count_message_tokens(request_messages, apply_claude_correction=False)
+            if request_tools:
+                input_tokens += count_tools_tokens(request_tools, apply_claude_correction=False)
         
         # Determine stop reason
         stop_reason = "tool_use" if tool_blocks else "end_turn"
@@ -520,6 +528,7 @@ async def stream_kiro_to_anthropic(
                 "stop_sequence": None
             },
             "usage": {
+                "input_tokens": input_tokens,
                 "output_tokens": output_tokens
             }
         })
@@ -761,7 +770,8 @@ async def stream_with_first_token_retry_anthropic(
             model_cache,
             auth_manager,
             first_token_timeout=first_token_timeout,
-            request_messages=request_messages
+            request_messages=request_messages,
+            request_tools=request_tools
         ):
             yield chunk
     

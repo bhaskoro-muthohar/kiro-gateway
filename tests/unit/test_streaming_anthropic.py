@@ -1108,10 +1108,129 @@ class TestStreamingAnthropicContextUsage:
                     ):
                         events.append(event)
                     
-                    # Verify count_message_tokens was called
-                    mock_count.assert_called_once_with(request_messages, apply_claude_correction=False)
+                    # Verify count_message_tokens was called (twice: initial estimate + fallback)
+                    assert mock_count.call_count == 2
+                    mock_count.assert_called_with(request_messages, apply_claude_correction=False)
         
         print("✓ Request messages used for input token count")
+
+    @pytest.mark.asyncio
+    async def test_message_delta_includes_input_tokens_from_context_usage(self, mock_response, mock_model_cache, mock_auth_manager):
+        """
+        What it does: Verifies message_delta includes corrected input_tokens from contextUsagePercentage.
+        Goal: Ensure Claude Code receives accurate context usage in the final event.
+        """
+        print("Setup: Mock stream with context usage percentage...")
+
+        async def mock_parse_kiro_stream(*args, **kwargs):
+            yield KiroEvent(type="content", content="Hello world")
+            yield KiroEvent(type="context_usage", context_usage_percentage=10.0)
+
+        print("Action: Streaming to Anthropic format...")
+        events = []
+
+        with patch('kiro.streaming_anthropic.parse_kiro_stream', mock_parse_kiro_stream):
+            with patch('kiro.streaming_anthropic.parse_bracket_tool_calls', return_value=[]):
+                with patch('kiro.streaming_anthropic.count_tokens', return_value=100):
+                    async for event in stream_kiro_to_anthropic(
+                        mock_response, "claude-sonnet-4", mock_model_cache, mock_auth_manager
+                    ):
+                        events.append(event)
+
+        # Find message_delta event and parse its JSON
+        message_delta_events = [e for e in events if "message_delta" in e]
+        assert len(message_delta_events) >= 1
+
+        # Extract JSON from SSE format
+        delta_data = json.loads(message_delta_events[0].split("data: ")[1])
+        usage = delta_data["usage"]
+
+        # input_tokens should be derived from context_usage (10% of 200000 = 20000 total - 100 output = 19900)
+        assert "input_tokens" in usage
+        assert usage["input_tokens"] == 19900
+        assert usage["output_tokens"] == 100
+        print(f"✓ message_delta includes corrected input_tokens={usage['input_tokens']}")
+
+    @pytest.mark.asyncio
+    async def test_message_delta_includes_input_tokens_fallback_without_context_usage(self, mock_response, mock_model_cache, mock_auth_manager):
+        """
+        What it does: Verifies message_delta includes tiktoken input_tokens when contextUsagePercentage is absent.
+        Goal: Ensure no regression — input_tokens still appears in message_delta even without context usage.
+        """
+        print("Setup: Mock stream without context usage...")
+
+        async def mock_parse_kiro_stream(*args, **kwargs):
+            yield KiroEvent(type="content", content="Hello")
+
+        request_messages = [{"role": "user", "content": "Hi there!"}]
+
+        print("Action: Streaming to Anthropic format with request messages...")
+        events = []
+
+        with patch('kiro.streaming_anthropic.parse_kiro_stream', mock_parse_kiro_stream):
+            with patch('kiro.streaming_anthropic.parse_bracket_tool_calls', return_value=[]):
+                with patch('kiro.streaming_anthropic.count_message_tokens', return_value=50):
+                    with patch('kiro.streaming_anthropic.count_tokens', return_value=5):
+                        async for event in stream_kiro_to_anthropic(
+                            mock_response, "claude-sonnet-4", mock_model_cache, mock_auth_manager,
+                            request_messages=request_messages
+                        ):
+                            events.append(event)
+
+        # Find message_delta event
+        message_delta_events = [e for e in events if "message_delta" in e]
+        assert len(message_delta_events) >= 1
+
+        delta_data = json.loads(message_delta_events[0].split("data: ")[1])
+        usage = delta_data["usage"]
+
+        assert "input_tokens" in usage
+        assert usage["input_tokens"] == 50
+        assert usage["output_tokens"] == 5
+        print(f"✓ message_delta includes fallback input_tokens={usage['input_tokens']}")
+
+    @pytest.mark.asyncio
+    async def test_message_delta_includes_tools_tokens_in_fallback(self, mock_response, mock_model_cache, mock_auth_manager):
+        """
+        What it does: Verifies tools tokens are included in fallback input_tokens when contextUsagePercentage is absent.
+        Goal: Ensure parity with OpenAI path — tool definitions counted in fallback estimate.
+        """
+        print("Setup: Mock stream without context usage, with tools...")
+
+        async def mock_parse_kiro_stream(*args, **kwargs):
+            yield KiroEvent(type="content", content="Hello")
+
+        request_messages = [{"role": "user", "content": "Hi"}]
+        request_tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {}}}]
+
+        print("Action: Streaming with request messages and tools...")
+        events = []
+
+        with patch('kiro.streaming_anthropic.parse_kiro_stream', mock_parse_kiro_stream):
+            with patch('kiro.streaming_anthropic.parse_bracket_tool_calls', return_value=[]):
+                with patch('kiro.streaming_anthropic.count_message_tokens', return_value=30):
+                    with patch('kiro.streaming_anthropic.count_tools_tokens', return_value=20) as mock_tools_count:
+                        with patch('kiro.streaming_anthropic.count_tokens', return_value=5):
+                            async for event in stream_kiro_to_anthropic(
+                                mock_response, "claude-sonnet-4", mock_model_cache, mock_auth_manager,
+                                request_messages=request_messages,
+                                request_tools=request_tools
+                            ):
+                                events.append(event)
+
+                            mock_tools_count.assert_called_once_with(request_tools, apply_claude_correction=False)
+
+        # Find message_delta event
+        message_delta_events = [e for e in events if "message_delta" in e]
+        assert len(message_delta_events) >= 1
+
+        delta_data = json.loads(message_delta_events[0].split("data: ")[1])
+        usage = delta_data["usage"]
+
+        # input_tokens should be messages (30) + tools (20) = 50
+        assert usage["input_tokens"] == 50
+        assert usage["output_tokens"] == 5
+        print(f"✓ message_delta includes tools in fallback input_tokens={usage['input_tokens']}")
 
 
 # ==================================================================================================
