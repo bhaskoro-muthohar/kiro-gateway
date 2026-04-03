@@ -268,7 +268,84 @@ class TestModelInfoCacheGetMaxInputTokens:
         assert max_tokens == DEFAULT_MAX_INPUT_TOKENS
 
 
-class TestModelInfoCacheIsEmpty:
+class TestModelInfoCacheGetMaxInputTokensNormalization:
+    """Tests for model name normalization in get_max_input_tokens."""
+
+    @pytest.mark.asyncio
+    async def test_get_max_input_tokens_normalizes_dashed_name(self):
+        """
+        What it does: Verifies dashed model name resolves to dotted cache key.
+        Goal: Ensure claude-opus-4-6 finds claude-opus-4.6 in cache.
+        """
+        print("Setup: Cache with dotted model name and 1M context...")
+        cache = ModelInfoCache()
+        await cache.update([{
+            "modelId": "claude-opus-4.6",
+            "tokenLimits": {"maxInputTokens": 1000000}
+        }])
+
+        print("Action: Lookup with dashed name claude-opus-4-6...")
+        max_tokens = cache.get_max_input_tokens("claude-opus-4-6")
+
+        print(f"Verify: Expected 1000000, Got {max_tokens}")
+        assert max_tokens == 1000000
+
+    @pytest.mark.asyncio
+    async def test_get_max_input_tokens_normalizes_dashed_name_with_date(self):
+        """
+        What it does: Verifies dashed model name with date suffix resolves correctly.
+        Goal: Ensure claude-opus-4-6-20260401 finds claude-opus-4.6 in cache.
+        """
+        print("Setup: Cache with dotted model name...")
+        cache = ModelInfoCache()
+        await cache.update([{
+            "modelId": "claude-opus-4.6",
+            "tokenLimits": {"maxInputTokens": 1000000}
+        }])
+
+        print("Action: Lookup with dashed name + date suffix...")
+        max_tokens = cache.get_max_input_tokens("claude-opus-4-6-20260401")
+
+        print(f"Verify: Expected 1000000, Got {max_tokens}")
+        assert max_tokens == 1000000
+
+    @pytest.mark.asyncio
+    async def test_get_max_input_tokens_exact_match_still_works(self):
+        """
+        What it does: Verifies exact dotted name still works.
+        Goal: No regression — direct cache key match still returns correct value.
+        """
+        print("Setup: Cache with dotted model name...")
+        cache = ModelInfoCache()
+        await cache.update([{
+            "modelId": "claude-sonnet-4.6",
+            "tokenLimits": {"maxInputTokens": 1000000}
+        }])
+
+        print("Action: Lookup with exact dotted name...")
+        max_tokens = cache.get_max_input_tokens("claude-sonnet-4.6")
+
+        print(f"Verify: Expected 1000000, Got {max_tokens}")
+        assert max_tokens == 1000000
+
+    @pytest.mark.asyncio
+    async def test_get_max_input_tokens_unknown_model_returns_default(self):
+        """
+        What it does: Verifies unknown model returns default even after normalization.
+        Goal: Normalization doesn't break fallback behavior.
+        """
+        print("Setup: Cache with known models...")
+        cache = ModelInfoCache()
+        await cache.update([{
+            "modelId": "claude-opus-4.6",
+            "tokenLimits": {"maxInputTokens": 1000000}
+        }])
+
+        print("Action: Lookup with completely unknown model...")
+        max_tokens = cache.get_max_input_tokens("totally-unknown-model")
+
+        print(f"Verify: Expected {DEFAULT_MAX_INPUT_TOKENS}, Got {max_tokens}")
+        assert max_tokens == DEFAULT_MAX_INPUT_TOKENS
     """Тесты проверки пустоты кэша."""
     
     def test_is_empty_returns_true_for_new_cache(self):

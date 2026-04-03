@@ -129,14 +129,20 @@ class ModelInfoCache:
     def get_max_input_tokens(self, model_id: str) -> int:
         """
         Returns maxInputTokens for the model.
-        
+
+        Normalizes the model name before lookup to handle format differences
+        (e.g., claude-opus-4-6 → claude-opus-4.6) since clients may send
+        dashed names while the cache stores dotted names from Kiro API.
+
         Args:
-            model_id: Model ID
-        
+            model_id: Model ID (may be in client format with dashes)
+
         Returns:
             Maximum number of input tokens or DEFAULT_MAX_INPUT_TOKENS
         """
-        model = self._cache.get(model_id)
+        from kiro.model_resolver import normalize_model_name
+        normalized = normalize_model_name(model_id)
+        model = self._cache.get(normalized) or self._cache.get(model_id)
         if model and model.get("tokenLimits"):
             return model["tokenLimits"].get("maxInputTokens") or DEFAULT_MAX_INPUT_TOKENS
         return DEFAULT_MAX_INPUT_TOKENS
