@@ -23,11 +23,15 @@ Made with ❤️ by [@Jwadow](https://github.com/jwadow)
 
 ## 🤖 Available Models
 
-> ⚠️ **Important:** Model availability depends on your Kiro tier (free/paid). The gateway provides access to whatever models are available in your IDE or CLI based on your subscription. The list below shows models commonly available on the **free tier**.
+> ⚠️ **Important:** Model availability depends on your Kiro tier (free/paid). The gateway provides access to whatever models are available in your IDE or CLI based on your subscription. The list below shows models commonly available.
 
-> 🔒 **Claude Opus 4.5** was removed from the free tier on January 17, 2026. It may be available on paid tiers — check your IDE/CLI model list.
+🧠 **Claude Opus 4.6** — Most capable Claude model. 1M context window. Best for complex engineering, deep reasoning, and ambitious tasks.
+
+🧠 **Claude Sonnet 4.6** — Latest Sonnet with 1M context window. Great balance of capability and speed.
 
 🚀 **Claude Sonnet 4.5** — Balanced performance. Great for coding, writing, and general-purpose tasks.
+
+🚀 **Claude Opus 4.5** — Previous flagship. Powerful for complex tasks. May require paid tier.
 
 ⚡ **Claude Haiku 4.5** — Lightning fast. Perfect for quick responses, simple tasks, and chat.
 
@@ -37,7 +41,11 @@ Made with ❤️ by [@Jwadow](https://github.com/jwadow)
 
 🐋 **DeepSeek-V3.2** — Open MoE model (685B params, 37B active). Balanced performance for coding, reasoning, and general tasks.
 
+🧩 **MiniMax M2.5** — Open MoE model. Latest generation for complex tasks, planning, and multi-step workflows.
+
 🧩 **MiniMax M2.1** — Open MoE model (230B params, 10B active). Great for complex tasks, planning, and multi-step workflows.
+
+🤖 **GLM-5** — Open model from Zhipu AI. Strong multilingual and reasoning capabilities.
 
 🤖 **Qwen3-Coder-Next** — Open MoE model (80B params, 3B active). Coding-focused. Excellent for development and large projects.
 
@@ -52,7 +60,7 @@ Made with ❤️ by [@Jwadow](https://github.com/jwadow)
 | 🔌 **OpenAI-compatible API** | Works with any OpenAI-compatible tool |
 | 🔌 **Anthropic-compatible API** | Native `/v1/messages` endpoint |
 | 🌐 **VPN/Proxy Support** | HTTP/SOCKS5 proxy for restricted networks |
-| 🧠 **Extended Thinking** | Reasoning is exclusive to our project |
+| 🧠 **Extended Thinking** | Reasoning with ULTRATHINK boost support |
 | 👁️ **Vision Support** | Send images to model |
 | 🛠️ **Tool Calling** | Supports function calling |
 | 💬 **Full message history** | Passes complete conversation context |
