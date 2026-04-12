@@ -419,8 +419,15 @@ FAKE_REASONING_ENABLED: bool = _FAKE_REASONING_RAW not in ("false", "0", "no", "
 # Maximum thinking length in tokens.
 # This value is injected into the request as <max_thinking_length>{value}</max_thinking_length>
 # Higher values allow for more detailed reasoning but increase response time and token usage.
-# Default: 4000 tokens
-FAKE_REASONING_MAX_TOKENS: int = int(os.getenv("FAKE_REASONING_MAX_TOKENS", "4000"))
+# Default: 10000 tokens
+FAKE_REASONING_MAX_TOKENS: int = int(os.getenv("FAKE_REASONING_MAX_TOKENS", "10000"))
+
+# ULTRATHINK boost: when the keyword "ULTRATHINK" appears in a user message,
+# the thinking budget is temporarily boosted to this value for that single turn.
+# This allows deeper reasoning for complex tasks without permanently increasing
+# the default thinking budget.
+# Default: 40000 tokens
+ULTRATHINK_MAX_TOKENS: int = int(os.getenv("ULTRATHINK_MAX_TOKENS", "40000"))
 
 # How to handle the thinking block in responses:
 # - "as_reasoning_content": Extract to reasoning_content field (OpenAI-compatible, recommended)

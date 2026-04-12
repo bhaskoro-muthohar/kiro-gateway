@@ -31,6 +31,7 @@ to convert their formats to Kiro API format.
 """
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -40,6 +41,7 @@ from kiro.config import (
     TOOL_DESCRIPTION_MAX_LENGTH,
     FAKE_REASONING_ENABLED,
     FAKE_REASONING_MAX_TOKENS,
+    ULTRATHINK_MAX_TOKENS,
     KIRO_MAX_PAYLOAD_BYTES,
     AUTO_TRIM_PAYLOAD,
 )
@@ -328,23 +330,28 @@ def get_truncation_recovery_system_addition() -> str:
     )
 
 
-def inject_thinking_tags(content: str) -> str:
+def inject_thinking_tags(content: str, max_tokens_override: Optional[int] = None) -> str:
     """
     Inject fake reasoning tags into content.
-    
+
     When FAKE_REASONING_ENABLED is True, this function prepends the special
     thinking mode tags to the content. These tags instruct the model to
     include its reasoning process in the response.
-    
+
     Args:
         content: Original content string
-    
+        max_tokens_override: Optional override for max thinking tokens.
+            When provided, uses this value instead of FAKE_REASONING_MAX_TOKENS.
+            Used by ULTRATHINK to boost thinking budget for a single turn.
+
     Returns:
         Content with thinking tags prepended (if enabled) or original content
     """
     if not FAKE_REASONING_ENABLED:
         return content
-    
+
+    max_tokens = max_tokens_override if max_tokens_override is not None else FAKE_REASONING_MAX_TOKENS
+
     # Thinking instruction to improve reasoning quality
     thinking_instruction = (
         "Think in English for better reasoning quality.\n\n"
@@ -357,16 +364,55 @@ def inject_thinking_tags(content: str) -> str:
         "After completing your thinking, respond in the same language the user is using in their messages, or in the language specified in their settings if available.\n\n"
         "Take the time you need. Quality of thought matters more than speed."
     )
-    
+
     thinking_prefix = (
         f"<thinking_mode>enabled</thinking_mode>\n"
-        f"<max_thinking_length>{FAKE_REASONING_MAX_TOKENS}</max_thinking_length>\n"
+        f"<max_thinking_length>{max_tokens}</max_thinking_length>\n"
         f"<thinking_instruction>{thinking_instruction}</thinking_instruction>\n\n"
     )
-    
-    logger.debug(f"Injecting fake reasoning tags with max_tokens={FAKE_REASONING_MAX_TOKENS}")
-    
+
+    logger.debug(f"Injecting fake reasoning tags with max_tokens={max_tokens}")
+
     return thinking_prefix + content
+
+
+# Compiled regex for ULTRATHINK keyword detection (word boundary, case-insensitive)
+_ULTRATHINK_PATTERN = re.compile(r'\bULTRATHINK\b', re.IGNORECASE)
+
+
+def detect_and_strip_ultrathink(content: str) -> Tuple[str, bool]:
+    """
+    Detect and strip the ULTRATHINK keyword from message content.
+
+    ULTRATHINK is a control signal (typically sent by Claude Code) that
+    indicates the model should think much deeper for this single turn.
+    The keyword is always stripped from the content before sending to the model.
+
+    Detection is case-insensitive. The keyword is removed along with any
+    surrounding whitespace artifacts (leading/trailing whitespace, double
+    newlines left behind, etc.).
+
+    Args:
+        content: The user message content string.
+
+    Returns:
+        Tuple of (cleaned_content, ultrathink_detected).
+        cleaned_content has the keyword removed and whitespace normalized.
+        ultrathink_detected is True if the keyword was found.
+    """
+    if not _ULTRATHINK_PATTERN.search(content):
+        return content, False
+
+    cleaned = _ULTRATHINK_PATTERN.sub('', content)
+
+    # Normalize whitespace artifacts left by removal:
+    # collapse runs of 3+ newlines into double-newline, strip edges
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    cleaned = cleaned.strip()
+
+    logger.info("ULTRATHINK keyword detected — boosting thinking budget for this turn")
+
+    return cleaned, True
 
 
 # ==================================================================================================
@@ -1484,9 +1530,15 @@ def build_kiro_payload(
         if tool_results:
             user_input_context["toolResults"] = tool_results
     
+    # Detect ULTRATHINK keyword (always strip, even if thinking disabled)
+    ultrathink_detected = False
+    if current_message.role == "user":
+        current_content, ultrathink_detected = detect_and_strip_ultrathink(current_content)
+
     # Inject thinking tags if enabled (only for the current/last user message)
     if inject_thinking and current_message.role == "user":
-        current_content = inject_thinking_tags(current_content)
+        max_tokens_override = ULTRATHINK_MAX_TOKENS if ultrathink_detected else None
+        current_content = inject_thinking_tags(current_content, max_tokens_override=max_tokens_override)
     
     # Build userInputMessage
     user_input_message = {

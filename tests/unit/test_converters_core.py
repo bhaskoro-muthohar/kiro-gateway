@@ -29,6 +29,7 @@ from kiro.converters_core import (
     build_kiro_payload,
     process_tools_with_long_descriptions,
     inject_thinking_tags,
+    detect_and_strip_ultrathink,
     extract_tool_results_from_content,
     extract_tool_uses_from_message,
     sanitize_json_schema,
@@ -6245,3 +6246,350 @@ class TestGetTruncationRecoverySystemAddition:
         lines = addition.split("\n")
         print(f"Comparing line count: Expected >5, Got {len(lines)}")
         assert len(lines) > 5
+
+
+# ==================================================================================================
+# Tests for detect_and_strip_ultrathink
+# ==================================================================================================
+
+class TestDetectAndStripUltrathink:
+    """
+    Tests for detect_and_strip_ultrathink function.
+
+    This function detects the ULTRATHINK keyword in user messages and strips it.
+    Detection is case-insensitive with word boundary matching.
+    """
+
+    def test_no_keyword_returns_unchanged(self):
+        """
+        What it does: Verifies content without ULTRATHINK passes through unchanged.
+        Purpose: Ensure no false positives on normal content.
+        """
+        content = "Write a function to sort a list"
+
+        result, detected = detect_and_strip_ultrathink(content)
+
+        assert result == content
+        assert detected is False
+
+    def test_detects_uppercase(self):
+        """
+        What it does: Verifies ULTRATHINK in uppercase is detected and stripped.
+        Purpose: Ensure standard keyword form works.
+        """
+        content = "ULTRATHINK\nRefactor this module"
+
+        result, detected = detect_and_strip_ultrathink(content)
+
+        assert detected is True
+        assert "ULTRATHINK" not in result
+        assert result == "Refactor this module"
+
+    def test_detects_lowercase(self):
+        """
+        What it does: Verifies ultrathink in lowercase is detected and stripped.
+        Purpose: Ensure case-insensitive matching.
+        """
+        content = "ultrathink\nRefactor this module"
+
+        result, detected = detect_and_strip_ultrathink(content)
+
+        assert detected is True
+        assert "ultrathink" not in result
+        assert result == "Refactor this module"
+
+    def test_detects_mixed_case(self):
+        """
+        What it does: Verifies UltraThink in mixed case is detected and stripped.
+        Purpose: Ensure case-insensitive matching for all variations.
+        """
+        content = "UltraThink\nRefactor this module"
+
+        result, detected = detect_and_strip_ultrathink(content)
+
+        assert detected is True
+        assert "UltraThink" not in result
+        assert result == "Refactor this module"
+
+    def test_keyword_at_end(self):
+        """
+        What it does: Verifies keyword at end of content is stripped cleanly.
+        Purpose: Ensure trailing keyword doesn't leave whitespace artifacts.
+        """
+        content = "Refactor this module\nULTRATHINK"
+
+        result, detected = detect_and_strip_ultrathink(content)
+
+        assert detected is True
+        assert result == "Refactor this module"
+
+    def test_keyword_in_middle(self):
+        """
+        What it does: Verifies keyword in middle of content is stripped with proper whitespace.
+        Purpose: Ensure no triple+ newlines remain after stripping.
+        """
+        content = "Line1\nULTRATHINK\nLine2"
+
+        result, detected = detect_and_strip_ultrathink(content)
+
+        assert detected is True
+        assert "ULTRATHINK" not in result
+        assert "Line1" in result
+        assert "Line2" in result
+
+    def test_keyword_alone(self):
+        """
+        What it does: Verifies content that is only the keyword returns empty string.
+        Purpose: Ensure edge case of keyword-only content is handled.
+        """
+        content = "ULTRATHINK"
+
+        result, detected = detect_and_strip_ultrathink(content)
+
+        assert detected is True
+        assert result == ""
+
+    def test_no_triple_newlines_after_strip(self):
+        """
+        What it does: Verifies triple+ newlines are collapsed after keyword removal.
+        Purpose: Ensure whitespace normalization works correctly.
+        """
+        content = "A\n\nULTRATHINK\n\nB"
+
+        result, detected = detect_and_strip_ultrathink(content)
+
+        assert detected is True
+        assert "\n\n\n" not in result
+        assert "A" in result
+        assert "B" in result
+
+    def test_not_matched_as_substring(self):
+        """
+        What it does: Verifies ULTRATHINKING (substring) is NOT matched.
+        Purpose: Ensure word boundary prevents false positives on similar words.
+        """
+        content = "ULTRATHINKING is cool"
+
+        result, detected = detect_and_strip_ultrathink(content)
+
+        assert detected is False
+        assert result == "ULTRATHINKING is cool"
+
+    def test_empty_content(self):
+        """
+        What it does: Verifies empty string returns empty string with no detection.
+        Purpose: Ensure edge case of empty content is handled.
+        """
+        content = ""
+
+        result, detected = detect_and_strip_ultrathink(content)
+
+        assert result == ""
+        assert detected is False
+
+    def test_multiple_occurrences(self):
+        """
+        What it does: Verifies multiple ULTRATHINK keywords are all stripped.
+        Purpose: Ensure all occurrences are removed, not just the first.
+        """
+        content = "ULTRATHINK\nDo something\nultrathink"
+
+        result, detected = detect_and_strip_ultrathink(content)
+
+        assert detected is True
+        assert "ULTRATHINK" not in result.upper()
+        assert "Do something" in result
+
+    def test_keyword_with_surrounding_whitespace(self):
+        """
+        What it does: Verifies keyword with extra whitespace is stripped cleanly.
+        Purpose: Ensure leading/trailing whitespace is normalized after stripping.
+        """
+        content = "  ULTRATHINK  \nDo it"
+
+        result, detected = detect_and_strip_ultrathink(content)
+
+        assert detected is True
+        assert result == "Do it"
+
+
+# ==================================================================================================
+# Tests for inject_thinking_tags with max_tokens_override
+# ==================================================================================================
+
+class TestInjectThinkingTagsWithOverride:
+    """
+    Tests for inject_thinking_tags max_tokens_override parameter.
+
+    Verifies that the override parameter correctly controls the max_thinking_length
+    value in injected tags, used by ULTRATHINK to boost thinking budget.
+    """
+
+    def test_override_uses_custom_value(self):
+        """
+        What it does: Verifies override value is used in max_thinking_length tag.
+        Purpose: Ensure ULTRATHINK boost applies the correct token budget.
+        """
+        content = "Solve this complex problem"
+
+        with patch('kiro.converters_core.FAKE_REASONING_ENABLED', True):
+            with patch('kiro.converters_core.FAKE_REASONING_MAX_TOKENS', 10000):
+                result = inject_thinking_tags(content, max_tokens_override=40000)
+
+        assert "<max_thinking_length>40000</max_thinking_length>" in result
+        assert "<max_thinking_length>10000</max_thinking_length>" not in result
+        assert result.endswith("Solve this complex problem")
+
+    def test_no_override_uses_default(self):
+        """
+        What it does: Verifies default FAKE_REASONING_MAX_TOKENS is used without override.
+        Purpose: Ensure backward compatibility when no override is passed.
+        """
+        content = "Simple question"
+
+        with patch('kiro.converters_core.FAKE_REASONING_ENABLED', True):
+            with patch('kiro.converters_core.FAKE_REASONING_MAX_TOKENS', 10000):
+                result = inject_thinking_tags(content)
+
+        assert "<max_thinking_length>10000</max_thinking_length>" in result
+
+    def test_none_override_uses_default(self):
+        """
+        What it does: Verifies explicit None override falls back to default.
+        Purpose: Ensure None is treated the same as not passing the parameter.
+        """
+        content = "Another question"
+
+        with patch('kiro.converters_core.FAKE_REASONING_ENABLED', True):
+            with patch('kiro.converters_core.FAKE_REASONING_MAX_TOKENS', 10000):
+                result = inject_thinking_tags(content, max_tokens_override=None)
+
+        assert "<max_thinking_length>10000</max_thinking_length>" in result
+
+    def test_override_ignored_when_disabled(self):
+        """
+        What it does: Verifies override has no effect when fake reasoning is disabled.
+        Purpose: Ensure FAKE_REASONING_ENABLED=False takes precedence over override.
+        """
+        content = "Some content"
+
+        with patch('kiro.converters_core.FAKE_REASONING_ENABLED', False):
+            result = inject_thinking_tags(content, max_tokens_override=40000)
+
+        assert result == "Some content"
+
+
+# ==================================================================================================
+# Tests for build_kiro_payload ULTRATHINK integration
+# ==================================================================================================
+
+class TestBuildKiroPayloadUltrathink:
+    """
+    Tests for ULTRATHINK keyword integration in build_kiro_payload.
+
+    Verifies end-to-end behavior: keyword detection, stripping, and thinking budget boost
+    through the full payload building pipeline.
+    """
+
+    def test_ultrathink_boosts_budget(self):
+        """
+        What it does: Verifies ULTRATHINK in last message boosts thinking budget and is stripped.
+        Purpose: Ensure end-to-end ULTRATHINK flow works correctly.
+        """
+        messages = [
+            UnifiedMessage(role="user", content="ULTRATHINK\nSolve this complex problem"),
+        ]
+
+        with patch('kiro.converters_core.FAKE_REASONING_ENABLED', True):
+            with patch('kiro.converters_core.FAKE_REASONING_MAX_TOKENS', 10000):
+                with patch('kiro.converters_core.ULTRATHINK_MAX_TOKENS', 40000):
+                    result = build_kiro_payload(
+                        messages=messages,
+                        system_prompt="You are helpful",
+                        model_id="claude-sonnet-4.5",
+                        tools=None,
+                        conversation_id="test-conv",
+                        profile_arn="test-arn",
+                        inject_thinking=True,
+                    )
+
+        content = result.payload["conversationState"]["currentMessage"]["userInputMessage"]["content"]
+        assert "<max_thinking_length>40000</max_thinking_length>" in content
+        assert "ULTRATHINK" not in content.split("<thinking_instruction>")[0]
+        assert "Solve this complex problem" in content
+
+    def test_stripped_even_when_thinking_disabled(self):
+        """
+        What it does: Verifies ULTRATHINK keyword is stripped even when thinking injection is off.
+        Purpose: Ensure the keyword never reaches the model regardless of thinking settings.
+        """
+        messages = [
+            UnifiedMessage(role="user", content="ULTRATHINK\nJust do it"),
+        ]
+
+        with patch('kiro.converters_core.FAKE_REASONING_ENABLED', False):
+            result = build_kiro_payload(
+                messages=messages,
+                system_prompt="You are helpful",
+                model_id="claude-sonnet-4.5",
+                tools=None,
+                conversation_id="test-conv",
+                profile_arn="test-arn",
+                inject_thinking=False,
+            )
+
+        content = result.payload["conversationState"]["currentMessage"]["userInputMessage"]["content"]
+        assert "ULTRATHINK" not in content
+        assert "Just do it" in content
+
+    def test_no_keyword_uses_default(self):
+        """
+        What it does: Verifies normal messages use default thinking budget.
+        Purpose: Ensure no boost when ULTRATHINK is absent.
+        """
+        messages = [
+            UnifiedMessage(role="user", content="Normal question"),
+        ]
+
+        with patch('kiro.converters_core.FAKE_REASONING_ENABLED', True):
+            with patch('kiro.converters_core.FAKE_REASONING_MAX_TOKENS', 10000):
+                result = build_kiro_payload(
+                    messages=messages,
+                    system_prompt="You are helpful",
+                    model_id="claude-sonnet-4.5",
+                    tools=None,
+                    conversation_id="test-conv",
+                    profile_arn="test-arn",
+                    inject_thinking=True,
+                )
+
+        content = result.payload["conversationState"]["currentMessage"]["userInputMessage"]["content"]
+        assert "<max_thinking_length>10000</max_thinking_length>" in content
+
+    def test_keyword_in_history_not_detected(self):
+        """
+        What it does: Verifies ULTRATHINK in earlier messages does NOT trigger boost.
+        Purpose: Ensure only the current (last) message is checked for the keyword.
+        """
+        messages = [
+            UnifiedMessage(role="user", content="ULTRATHINK\nFirst question"),
+            UnifiedMessage(role="assistant", content="Here's my answer"),
+            UnifiedMessage(role="user", content="Follow-up question"),
+        ]
+
+        with patch('kiro.converters_core.FAKE_REASONING_ENABLED', True):
+            with patch('kiro.converters_core.FAKE_REASONING_MAX_TOKENS', 10000):
+                with patch('kiro.converters_core.ULTRATHINK_MAX_TOKENS', 40000):
+                    result = build_kiro_payload(
+                        messages=messages,
+                        system_prompt="You are helpful",
+                        model_id="claude-sonnet-4.5",
+                        tools=None,
+                        conversation_id="test-conv",
+                        profile_arn="test-arn",
+                        inject_thinking=True,
+                    )
+
+        content = result.payload["conversationState"]["currentMessage"]["userInputMessage"]["content"]
+        # Should use default budget since ULTRATHINK is only in history, not current message
+        assert "<max_thinking_length>10000</max_thinking_length>" in content
