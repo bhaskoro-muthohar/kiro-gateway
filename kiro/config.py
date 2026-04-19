@@ -224,13 +224,13 @@ HIDDEN_MODELS: Dict[str, str] = {
 #
 # Use cases:
 # - Avoid conflicts with IDE-specific model names (e.g., Cursor's "auto")
-# - Create user-friendly shortcuts (e.g., "my-opus" → "claude-opus-4.5")
+# - Create user-friendly shortcuts (e.g., "my-opus" → "claude-opus-4.7")
 # - Support legacy model names from other providers
 #
 # Example:
 #   MODEL_ALIASES = {
 #       "auto-kiro": "auto",
-#       "my-opus": "claude-opus-4.5",
+#       "my-opus": "claude-opus-4.7",
 #       "gpt-5": "claude-sonnet-4.5"
 #   }
 #
@@ -270,6 +270,7 @@ FALLBACK_MODELS: List[Dict[str, str]] = [
     {"modelId": "claude-opus-4.5"},
     {"modelId": "claude-sonnet-4.6"},
     {"modelId": "claude-opus-4.6"},
+    {"modelId": "claude-opus-4.7"},
 ]
 
 # ==================================================================================================
@@ -458,13 +459,13 @@ FAKE_REASONING_INITIAL_BUFFER_SIZE: int = int(os.getenv("FAKE_REASONING_INITIAL_
 # Payload Size Guard Settings
 # ==================================================================================================
 
-# Payload size limit in bytes (Kiro API rejects > ~615KB with cryptic 400 error)
-# Default 600KB provides safety margin below the ~615KB hard limit
-KIRO_MAX_PAYLOAD_BYTES: int = int(os.getenv("KIRO_MAX_PAYLOAD_BYTES", "600000"))
+# Payload size limit in bytes (Kiro API rejects > ~4MB with "Input is too long." error)
+# Default 3.8MB provides safety margin below the ~3.95MB hard limit
+KIRO_MAX_PAYLOAD_BYTES: int = int(os.getenv("KIRO_MAX_PAYLOAD_BYTES", "3800000"))
 
-# Auto-trim payload when over limit (default: true)
+# Auto-trim payload when over limit (default: false, opt-in for edge cases)
 # When false, returns a clear error instead of trimming
-AUTO_TRIM_PAYLOAD: bool = os.getenv("AUTO_TRIM_PAYLOAD", "true").lower() in ("true", "1", "yes")
+AUTO_TRIM_PAYLOAD: bool = os.getenv("AUTO_TRIM_PAYLOAD", "false").lower() in ("true", "1", "yes")
 
 # ==================================================================================================
 # Application Version

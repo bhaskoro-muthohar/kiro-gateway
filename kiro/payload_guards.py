@@ -3,8 +3,8 @@
 """
 Payload size guard for Kiro API requests.
 
-The Kiro API rejects payloads exceeding ~615KB with a misleading
-"Improperly formed request." (reason: null) error. This module provides:
+The Kiro API rejects payloads exceeding ~4MB with an "Input is too long."
+(reason: CONTENT_LENGTH_EXCEEDS_THRESHOLD) error. This module provides:
 - Pre-flight size checking
 - Auto-trimming of oldest history entries to fit under the limit
 

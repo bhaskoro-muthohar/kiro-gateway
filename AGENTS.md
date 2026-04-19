@@ -77,6 +77,10 @@ This document provides essential information for AI agents (Claude, GPT, etc.) w
 
 When debugging this error, systematic testing is required to identify the actual cause. The gateway fixes known validation quirks, but new edge cases may emerge as Kiro API evolves.
 
+**Note (April 2026):** Payload size errors now return a specific `"Input is too long."` message
+with `reason: CONTENT_LENGTH_EXCEEDS_THRESHOLD` instead of the generic "Improperly formed request."
+The payload size limit has been raised from ~615KB to ~4MB.
+
 ## Project Overview
 
 **Kiro Gateway** is a Python FastAPI proxy server that provides OpenAI-compatible and Anthropic-compatible APIs for Kiro (Amazon Q Developer / AWS CodeWhisperer). It translates requests between different API formats and handles authentication, streaming, model resolution, and error handling.

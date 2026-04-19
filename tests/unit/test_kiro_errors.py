@@ -487,7 +487,7 @@ class TestEnhanceImproperlyFormedRequest:
         }
         error_info = enhance_kiro_error(error_json)
 
-        assert "payload size exceeded" in error_info.user_message
+        assert "validation error" in error_info.user_message
         assert "/compact" in error_info.user_message
         assert error_info.original_message == "Improperly formed request."
 
@@ -496,7 +496,7 @@ class TestEnhanceImproperlyFormedRequest:
         error_json = {"message": "Improperly formed request."}
         error_info = enhance_kiro_error(error_json)
 
-        assert "payload size exceeded" in error_info.user_message
+        assert "validation error" in error_info.user_message
 
     def test_improperly_formed_with_real_reason_not_enhanced(self):
         """If reason is a real code, don't apply the size-limit enhancement."""
@@ -507,4 +507,4 @@ class TestEnhanceImproperlyFormedRequest:
         error_info = enhance_kiro_error(error_json)
 
         # Should fall through to generic handler, not the size-limit message
-        assert "payload size exceeded" not in error_info.user_message
+        assert "validation error" not in error_info.user_message.lower()
