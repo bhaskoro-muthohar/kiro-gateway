@@ -72,6 +72,7 @@ def normalize_model_name(name: str) -> str:
     5. claude-3-7-sonnet → claude-3.7-sonnet (legacy format normalization)
     6. claude-3-7-sonnet-20250219 → claude-3.7-sonnet (legacy + strip date)
     7. claude-4.5-opus-high → claude-opus-4.5 (inverted format with suffix)
+    8. claude-opus-4-7 → claude-opus-4.7 (dash to dot for Opus 4.7)
     
     Args:
         name: External model name from client
@@ -98,6 +99,8 @@ def normalize_model_name(name: str) -> str:
         'claude-opus-4.5'
         >>> normalize_model_name("claude-4.5-sonnet-low")
         'claude-sonnet-4.5'
+        >>> normalize_model_name("claude-opus-4-7")
+        'claude-opus-4.7'
         >>> normalize_model_name("auto")
         'auto'
     """

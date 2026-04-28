@@ -45,6 +45,7 @@ def mock_model_cache():
         "claude-opus-4.5": {"modelId": "claude-opus-4.5", "modelName": "Claude Opus 4.5"},
         "claude-sonnet-4.6": {"modelId": "claude-sonnet-4.6", "modelName": "Claude Sonnet 4.6"},
         "claude-opus-4.6": {"modelId": "claude-opus-4.6", "modelName": "Claude Opus 4.6"},
+        "claude-opus-4.7": {"modelId": "claude-opus-4.7", "modelName": "Claude Opus 4.7"},
     }
     return cache
 
@@ -418,6 +419,52 @@ class TestNormalizeModelName:
         print(f"Comparing result: Expected 'claude-sonnet-4.6', Got '{result}'")
         assert result == "claude-sonnet-4.6"
 
+    # === Claude 4.7 models (1M context) ===
+
+    def test_normalizes_opus_4_7_dash_to_dot(self):
+        """
+        What it does: claude-opus-4-7 → claude-opus-4.7
+        Goal: Check dash-to-dot conversion for Opus 4.7 model.
+        """
+        print("Action: Normalizing 'claude-opus-4-7'...")
+        result = normalize_model_name("claude-opus-4-7")
+
+        print(f"Comparing result: Expected 'claude-opus-4.7', Got '{result}'")
+        assert result == "claude-opus-4.7"
+
+    def test_strips_date_suffix_opus_4_7(self):
+        """
+        What it does: claude-opus-4-7-20260416 → claude-opus-4.7
+        Goal: Check date suffix removal for Opus 4.7.
+        """
+        print("Action: Normalizing 'claude-opus-4-7-20260416'...")
+        result = normalize_model_name("claude-opus-4-7-20260416")
+
+        print(f"Comparing result: Expected 'claude-opus-4.7', Got '{result}'")
+        assert result == "claude-opus-4.7"
+
+    def test_inverted_format_opus_4_7(self):
+        """
+        What it does: claude-4.7-opus-high → claude-opus-4.7
+        Goal: Check inverted Cursor IDE format for Opus 4.7.
+        """
+        print("Action: Normalizing 'claude-4.7-opus-high'...")
+        result = normalize_model_name("claude-4.7-opus-high")
+
+        print(f"Comparing result: Expected 'claude-opus-4.7', Got '{result}'")
+        assert result == "claude-opus-4.7"
+
+    def test_passthrough_already_normalized_opus_4_7(self):
+        """
+        What it does: claude-opus-4.7 → claude-opus-4.7
+        Goal: Check that already normalized 4.7 models are unchanged.
+        """
+        print("Action: Normalizing 'claude-opus-4.7'...")
+        result = normalize_model_name("claude-opus-4.7")
+
+        print(f"Comparing result: Expected 'claude-opus-4.7', Got '{result}'")
+        assert result == "claude-opus-4.7"
+
     # === Already normalized (passthrough) ===
     
     def test_passthrough_already_normalized_haiku(self):
@@ -505,6 +552,13 @@ class TestNormalizeModelNameParametrized:
         ("claude-sonnet-4-5-20250929", "claude-sonnet-4.5"),
         ("claude-opus-4-5", "claude-opus-4.5"),
         ("claude-opus-4-5-20251101", "claude-opus-4.5"),
+        # 4.6 models (1M context)
+        ("claude-opus-4-6", "claude-opus-4.6"),
+        ("claude-opus-4-6-20260301", "claude-opus-4.6"),
+        ("claude-sonnet-4-6", "claude-sonnet-4.6"),
+        # 4.7 models (1M context)
+        ("claude-opus-4-7", "claude-opus-4.7"),
+        ("claude-opus-4-7-20260416", "claude-opus-4.7"),
         # Without minor version
         ("claude-sonnet-4", "claude-sonnet-4"),
         ("claude-sonnet-4-20250514", "claude-sonnet-4"),
@@ -519,6 +573,8 @@ class TestNormalizeModelNameParametrized:
         ("claude-haiku-4.5", "claude-haiku-4.5"),
         ("claude-sonnet-4.5", "claude-sonnet-4.5"),
         ("claude-opus-4.5", "claude-opus-4.5"),
+        ("claude-opus-4.6", "claude-opus-4.6"),
+        ("claude-opus-4.7", "claude-opus-4.7"),
         ("claude-3.7-sonnet", "claude-3.7-sonnet"),
         ("auto", "auto"),
         # Passthrough for unknown
@@ -905,6 +961,7 @@ class TestModelResolverGetAvailableModels:
         assert "claude-haiku-4.5" in models
         assert "claude-sonnet-4.5" in models
         assert "claude-opus-4.5" in models
+        assert "claude-opus-4.7" in models
         assert "auto" in models
         
         # Check hidden models
@@ -958,6 +1015,7 @@ class TestModelResolverGetModelsByFamily:
         assert "claude-haiku-4.5" in models
         assert "claude-sonnet-4.5" not in models
         assert "claude-opus-4.5" not in models
+        assert "claude-opus-4.7" not in models
     
     def test_get_models_by_family_sonnet(self, model_resolver):
         """
@@ -985,6 +1043,7 @@ class TestModelResolverGetModelsByFamily:
         print(f"Received models: {models}")
         
         assert "claude-opus-4.5" in models
+        assert "claude-opus-4.7" in models
         assert "claude-sonnet-4.5" not in models
     
     def test_get_models_by_family_case_insensitive(self, model_resolver):
@@ -1447,7 +1506,7 @@ class TestModelAliasSystemBasics:
         print("Setup: Creating resolver with multiple aliases...")
         aliases = {
             "auto-kiro": "auto",
-            "my-opus": "claude-opus-4.5",
+            "my-opus": "claude-opus-4.7",
             "fast": "claude-haiku-4.5"
         }
         resolver = ModelResolver(cache=mock_model_cache, aliases=aliases)
@@ -1461,7 +1520,7 @@ class TestModelAliasSystemBasics:
         assert result1.internal_id == "auto"
         
         print(f"Comparing: my-opus → {result2.internal_id}")
-        assert result2.internal_id == "claude-opus-4.5"
+        assert result2.internal_id == "claude-opus-4.7"
         
         print(f"Comparing: fast → {result3.internal_id}")
         assert result3.internal_id == "claude-haiku-4.5"

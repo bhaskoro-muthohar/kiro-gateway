@@ -328,6 +328,46 @@ class TestModelInfoCacheGetMaxInputTokensNormalization:
         print(f"Verify: Expected 1000000, Got {max_tokens}")
         assert max_tokens == 1000000
 
+    # === Claude Opus 4.7 normalization ===
+
+    @pytest.mark.asyncio
+    async def test_get_max_input_tokens_normalizes_opus_4_7_dashed_name(self):
+        """
+        What it does: Verifies dashed model name resolves to dotted cache key.
+        Goal: Ensure claude-opus-4-7 finds claude-opus-4.7 in cache.
+        """
+        print("Setup: Cache with dotted model name and 1M context...")
+        cache = ModelInfoCache()
+        await cache.update([{
+            "modelId": "claude-opus-4.7",
+            "tokenLimits": {"maxInputTokens": 1000000}
+        }])
+
+        print("Action: Lookup with dashed name claude-opus-4-7...")
+        max_tokens = cache.get_max_input_tokens("claude-opus-4-7")
+
+        print(f"Verify: Expected 1000000, Got {max_tokens}")
+        assert max_tokens == 1000000
+
+    @pytest.mark.asyncio
+    async def test_get_max_input_tokens_normalizes_opus_4_7_dashed_name_with_date(self):
+        """
+        What it does: Verifies dashed model name with date suffix resolves correctly.
+        Goal: Ensure claude-opus-4-7-20260416 finds claude-opus-4.7 in cache.
+        """
+        print("Setup: Cache with dotted model name...")
+        cache = ModelInfoCache()
+        await cache.update([{
+            "modelId": "claude-opus-4.7",
+            "tokenLimits": {"maxInputTokens": 1000000}
+        }])
+
+        print("Action: Lookup with dashed name + date suffix...")
+        max_tokens = cache.get_max_input_tokens("claude-opus-4-7-20260416")
+
+        print(f"Verify: Expected 1000000, Got {max_tokens}")
+        assert max_tokens == 1000000
+
     @pytest.mark.asyncio
     async def test_get_max_input_tokens_unknown_model_returns_default(self):
         """

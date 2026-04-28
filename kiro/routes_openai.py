@@ -149,6 +149,7 @@ async def get_models(request: Request):
     logger.info("Request to /v1/models")
     
     model_resolver: ModelResolver = request.app.state.model_resolver
+    model_cache: ModelInfoCache = request.app.state.model_cache
     
     # Get all available models from resolver (cache + hidden models)
     available_model_ids = model_resolver.get_available_models()
@@ -158,7 +159,8 @@ async def get_models(request: Request):
         OpenAIModel(
             id=model_id,
             owned_by="anthropic",
-            description="Claude model via Kiro API"
+            description="Claude model via Kiro API",
+            max_input_tokens=model_cache.get_max_input_tokens(model_id),
         )
         for model_id in available_model_ids
     ]

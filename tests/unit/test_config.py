@@ -600,6 +600,9 @@ class TestFallbackModelsConfig:
 
         print("Verification: Contains claude-opus-4.6...")
         assert "claude-opus-4.6" in model_ids, "claude-opus-4.6 missing from fallback list"
+
+        print("Verification: Contains claude-opus-4.7...")
+        assert "claude-opus-4.7" in model_ids, "claude-opus-4.7 missing from fallback list"
     
     def test_fallback_models_use_dot_format(self):
         """
@@ -656,6 +659,7 @@ class TestFallbackModelsIntegration:
             ("claude-haiku-4-5", "claude-haiku-4.5"),  # Dash → Dot
             ("claude-opus-4-6", "claude-opus-4.6"),  # Dash → Dot (4.6, 1M context)
             ("claude-sonnet-4-6", "claude-sonnet-4.6"),  # Dash → Dot (4.6, 1M context)
+            ("claude-opus-4-7", "claude-opus-4.7"),  # Dash → Dot (4.7, 1M context)
         ]
         
         for input_name, expected_normalized in test_cases:
