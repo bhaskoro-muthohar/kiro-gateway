@@ -176,13 +176,12 @@ KIRO_REFRESH_URL_TEMPLATE: str = "https://prod.{region}.auth.desktop.kiro.dev/re
 AWS_SSO_OIDC_URL_TEMPLATE: str = "https://oidc.{region}.amazonaws.com/token"
 
 # Host for main API (generateAssistantResponse)
-# Universal endpoint for all regions (us-east-1, eu-central-1, etc.)
-# See: https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/security-data-perimeter.html
-# Fixed in issue #58 - codewhisperer.{region}.amazonaws.com doesn't exist for non-us-east-1 regions
-KIRO_API_HOST_TEMPLATE: str = "https://q.{region}.amazonaws.com"
+# Migrated to kiro.dev endpoints per AWS notice (effective May 15, 2026)
+# See: https://github.com/jwadow/kiro-gateway/issues/146
+KIRO_API_HOST_TEMPLATE: str = "https://runtime.{region}.kiro.dev"
 
 # Host for Q API (ListAvailableModels)
-KIRO_Q_HOST_TEMPLATE: str = "https://q.{region}.amazonaws.com"
+KIRO_Q_HOST_TEMPLATE: str = "https://runtime.{region}.kiro.dev"
 
 # ==================================================================================================
 # Token Settings

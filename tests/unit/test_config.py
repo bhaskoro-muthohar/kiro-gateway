@@ -969,3 +969,72 @@ class TestAccountSystemConfig:
         
         print(f"Comparing STATE_SAVE_INTERVAL_SECONDS: Expected 10, Got {config_module.STATE_SAVE_INTERVAL_SECONDS}")
         assert config_module.STATE_SAVE_INTERVAL_SECONDS == 10
+
+
+class TestKiroApiHostConfig:
+    """Tests for Kiro API host endpoint migration to kiro.dev."""
+
+    def test_kiro_api_host_template_uses_kiro_dev(self):
+        """
+        What it does: Verifies KIRO_API_HOST_TEMPLATE points to runtime.kiro.dev.
+        Purpose: Ensure endpoint migration from q.amazonaws.com to kiro.dev (issue #146).
+        """
+        from kiro.config import KIRO_API_HOST_TEMPLATE
+
+        assert "runtime" in KIRO_API_HOST_TEMPLATE
+        assert "kiro.dev" in KIRO_API_HOST_TEMPLATE
+        assert "amazonaws.com" not in KIRO_API_HOST_TEMPLATE
+        assert "{region}" in KIRO_API_HOST_TEMPLATE
+
+    def test_kiro_q_host_template_uses_kiro_dev(self):
+        """
+        What it does: Verifies KIRO_Q_HOST_TEMPLATE points to runtime.kiro.dev.
+        Purpose: Ensure endpoint migration from q.amazonaws.com to kiro.dev (issue #146).
+        """
+        from kiro.config import KIRO_Q_HOST_TEMPLATE
+
+        assert "runtime" in KIRO_Q_HOST_TEMPLATE
+        assert "kiro.dev" in KIRO_Q_HOST_TEMPLATE
+        assert "amazonaws.com" not in KIRO_Q_HOST_TEMPLATE
+        assert "{region}" in KIRO_Q_HOST_TEMPLATE
+
+    def test_get_kiro_api_host_formats_region_us_east_1(self):
+        """
+        What it does: Verifies get_kiro_api_host returns correct URL for us-east-1.
+        Purpose: Ensure the function formats the new kiro.dev URL correctly.
+        """
+        from kiro.config import get_kiro_api_host
+
+        url = get_kiro_api_host("us-east-1")
+        assert url == "https://runtime.us-east-1.kiro.dev"
+
+    def test_get_kiro_api_host_formats_region_eu_central_1(self):
+        """
+        What it does: Verifies get_kiro_api_host returns correct URL for eu-central-1.
+        Purpose: Ensure the function works with EU region (both supported regions per AWS notice).
+        """
+        from kiro.config import get_kiro_api_host
+
+        url = get_kiro_api_host("eu-central-1")
+        assert url == "https://runtime.eu-central-1.kiro.dev"
+
+    def test_get_kiro_q_host_formats_region(self):
+        """
+        What it does: Verifies get_kiro_q_host returns correct URL.
+        Purpose: Ensure Q host also uses the new kiro.dev endpoint.
+        """
+        from kiro.config import get_kiro_q_host
+
+        url = get_kiro_q_host("us-east-1")
+        assert url == "https://runtime.us-east-1.kiro.dev"
+
+    def test_auth_endpoints_unchanged(self):
+        """
+        What it does: Verifies auth/SSO endpoints are NOT migrated.
+        Purpose: Per AWS notice, authentication and SSO endpoints are not affected.
+        """
+        from kiro.config import KIRO_REFRESH_URL_TEMPLATE, AWS_SSO_OIDC_URL_TEMPLATE
+
+        assert "auth.desktop.kiro.dev" in KIRO_REFRESH_URL_TEMPLATE
+        assert "oidc" in AWS_SSO_OIDC_URL_TEMPLATE
+        assert "amazonaws.com" in AWS_SSO_OIDC_URL_TEMPLATE
